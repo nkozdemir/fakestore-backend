@@ -1,4 +1,6 @@
 from django.db import models
+from django.utils import timezone
+from apps.users.models import User
 
 class Category(models.Model):
     name = models.CharField(max_length=100, unique=True)
@@ -18,6 +20,20 @@ class Product(models.Model):
 
     def __str__(self):
         return self.title
+
+class Rating(models.Model):
+    product = models.ForeignKey('Product', on_delete=models.CASCADE, related_name='ratings')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='product_ratings')
+    value = models.IntegerField()
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('product', 'user')
+        db_table = 'product_ratings'
+
+    def __str__(self):
+        return f"Rating {self.value} for product {self.product_id} by user {self.user_id}"
 
 class ProductCategory(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE)

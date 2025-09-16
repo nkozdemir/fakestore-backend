@@ -1,11 +1,12 @@
 from typing import Optional, Dict, Any
-from .repositories import ProductRepository, CategoryRepository
+from .repositories import ProductRepository, CategoryRepository, RatingRepository
 from .dtos import product_to_dto, category_to_dto
-from .models import Product, Category
+from .models import Product, Category, Rating
 
 class ProductService:
     def __init__(self):
         self.products = ProductRepository()
+        self.ratings = RatingRepository()
 
     def list_products(self, category: Optional[str] = None):
         qs = self.products.list_by_category(category) if category else self.products.list()
@@ -47,6 +48,66 @@ class ProductService:
             return False
         self.products.delete(product)
         return True
+
+    # Rating related methods
+    def get_rating_summary(self, product_id: int, user_id: Optional[int] = None):
+        product = self.products.get(id=product_id)
+        if not product:
+            return None
+        user_rating = None
+        if user_id:
+            r = self.ratings.for_product_user(product_id, user_id)
+            if r:
+                user_rating = r.value
+        return {
+            'productId': product_id,
+            'rating': {
+                'rate': float(product.rate),
+                'count': product.count
+            },
+            'userRating': user_rating
+        }
+
+    def set_user_rating(self, product_id: int, user_id: int, value: int):
+        if value < 0 or value > 5:
+            return ('VALIDATION_ERROR', 'value must be between 0 and 5', {'value': value})
+        product = self.products.get(id=product_id)
+        if not product:
+            return ('NOT_FOUND', 'Product not found', {'id': product_id})
+        existing = self.ratings.for_product_user(product_id, user_id)
+        if existing:
+            existing.value = value
+            existing.save()
+        else:
+            self.ratings.create(product_id=product_id, user_id=user_id, value=value)
+        self._recalculate_product_rating(product)
+        return self.get_rating_summary(product_id, user_id)
+
+    def delete_user_rating(self, product_id: int, user_id: int):
+        product = self.products.get(id=product_id)
+        if not product:
+            return ('NOT_FOUND', 'Product not found', {'id': product_id})
+        existing = self.ratings.for_product_user(product_id, user_id)
+        if not existing:
+            # Idempotent delete - still return summary
+            return self.get_rating_summary(product_id, user_id)
+        existing.delete()
+        self._recalculate_product_rating(product)
+        return self.get_rating_summary(product_id, user_id)
+
+    def _recalculate_product_rating(self, product: Product):
+        qs = product.ratings.all()
+        count = qs.count()
+        if count == 0:
+            product.rate = 0
+            product.count = 0
+        else:
+            total = sum(r.value for r in qs)
+            avg = total / count
+            # one decimal place rounding
+            product.rate = round(avg + 1e-8, 1)
+            product.count = count
+        product.save(update_fields=['rate', 'count'])
 
 class CategoryService:
     def __init__(self):

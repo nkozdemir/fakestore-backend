@@ -69,6 +69,50 @@ class CategoryListView(APIView):
 class CategoryDetailView(APIView):
     service = CategoryService()
 
+class ProductRatingView(APIView):
+    service = ProductService()
+
+    def _current_user_id(self, request):
+        # Placeholder authentication extraction; replace with real auth (e.g., request.user.id)
+        # For now allow passing user id via header 'X-User-Id' or query param for testing.
+        uid = request.headers.get('X-User-Id') or request.query_params.get('userId')
+        try:
+            return int(uid) if uid is not None else None
+        except ValueError:
+            return None
+
+    def get(self, request, product_id: int):
+        user_id = self._current_user_id(request)
+        summary = self.service.get_rating_summary(product_id, user_id)
+        if summary is None:
+            return error_response('NOT_FOUND', 'Product not found', {'id': str(product_id)})
+        return Response(summary)
+
+    def post(self, request, product_id: int):
+        user_id = self._current_user_id(request)
+        if not user_id:
+            return error_response('VALIDATION_ERROR', 'Authentication required', None)
+        value = request.data.get('value')
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            return error_response('VALIDATION_ERROR', 'value must be between 0 and 5', {'value': value})
+        result = self.service.set_user_rating(product_id, user_id, value)
+        if isinstance(result, tuple):
+            code, msg, details = result
+            return error_response(code, msg, details)
+        return Response(result, status=status.HTTP_201_CREATED)
+
+    def delete(self, request, product_id: int):
+        user_id = self._current_user_id(request)
+        if not user_id:
+            return error_response('VALIDATION_ERROR', 'Authentication required', None)
+        result = self.service.delete_user_rating(product_id, user_id)
+        if isinstance(result, tuple):
+            code, msg, details = result
+            return error_response(code, msg, details)
+        return Response(result, status=status.HTTP_200_OK)
+
 class ProductByCategoriesView(APIView):
     service = ProductService()
     def get(self, request):
