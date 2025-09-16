@@ -1,0 +1,104 @@
+.DS_Store
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Distribution / packaging
+.build/
+build/
+dist/
+.eggs/
+*.egg-info/
+.installed.cfg
+*.egg
+pip-wheel-metadata/
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage
+.coverage
+.coverage.*
+.cache
+.nox/
+.pytest_cache/
+htmlcov/
+.tox/
+.mypy_cache/
+.pytype/
+
+# Type checker
+.dmypy.json
+dmypy.json
+
+# Django stuff
+*.log
+local_settings.py
+media/
+staticfiles/
+
+# SQLite (if ever used locally)
+*.sqlite3
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Jupyter
+.ipynb_checkpoints
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*.orig
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+
+# Thumbnails
+._*
+
+# Files that might appear on external disks
+.Spotlight-V100
+.Trashes
+
+# Docker
+*.pid
+# Ignore docker build artifacts if any temp dirs are used
+/tmp/docker-build/
+
+# Coverage / Reports
+coverage.xml
+pytestdebug.log
+
+# Misc
+*.bak
+*.tmp
+*.log.*
+
+# Node (if frontend added later)
+node_modules/
+
+# VS Code local history
+.history/
+
+# Python dotenv backup
+.env.backup

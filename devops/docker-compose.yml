@@ -1,0 +1,26 @@
+version: '3.9'
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-fakestore}
+      POSTGRES_USER: ${POSTGRES_USER:-fakestore}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fakestore}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+  web:
+    build:
+      context: ..
+      dockerfile: devops/Dockerfile
+    env_file:
+      - ../.env.example
+    depends_on:
+      - db
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../backend:/app/backend
+volumes:
+  pgdata:
