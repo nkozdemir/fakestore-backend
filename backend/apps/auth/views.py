@@ -14,7 +14,7 @@ class RegisterView(APIView):
     permission_classes = [AllowAny]
     def post(self, request):
         data = request.data.copy()
-        required = ['username', 'email', 'password', 'firstname', 'lastname']
+        required = ['username', 'email', 'password', 'first_name', 'last_name']
         missing = [f for f in required if not data.get(f)]
         if missing:
             return error_response('VALIDATION_ERROR', 'Missing fields', {'missing': missing})
@@ -23,7 +23,13 @@ class RegisterView(APIView):
         if User.objects.filter(email=data['email']).exists():
             return error_response('VALIDATION_ERROR', 'Email already exists', {'email': data['email']})
         data['password'] = make_password(data['password'])
-        user = User.objects.create(**{k: data[k] for k in required if k != 'password'}, password=data['password'])
+        payload = {k: data[k] for k in required if k != 'password'}
+        # If custom fields exist on the model (firstname/lastname), populate them too
+        if hasattr(User, 'firstname'):
+            payload['firstname'] = data['first_name']
+        if hasattr(User, 'lastname'):
+            payload['lastname'] = data['last_name']
+        user = User.objects.create(**payload, password=data['password'])
         return Response({'id': user.id, 'username': user.username, 'email': user.email}, status=status.HTTP_201_CREATED)
 
 class LoginView(TokenObtainPairView):

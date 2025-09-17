@@ -1,9 +1,9 @@
 from rest_framework import serializers
 from .dtos import CartDTO, CartProductDTO
-from apps.catalog.serializers import ProductSerializer
+from apps.catalog.serializers import ProductReadSerializer
 
 class CartProductSerializer(serializers.Serializer):
-    product = ProductSerializer()
+    product = ProductReadSerializer()
     quantity = serializers.IntegerField()
 
 class CartSerializer(serializers.Serializer):

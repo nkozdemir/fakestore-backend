@@ -2,7 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from .services import ProductService, CategoryService
-from .serializers import ProductSerializer, CategorySerializer
+from .serializers import ProductReadSerializer, ProductWriteSerializer, CategorySerializer
 from apps.api.utils import error_response
 
 class ProductListView(APIView):
@@ -10,15 +10,15 @@ class ProductListView(APIView):
     def get(self, request):
         category = request.query_params.get('category')
         data = self.service.list_products(category=category)
-        serializer = ProductSerializer(data=data, many=True)
+        serializer = ProductReadSerializer(data=data, many=True)
         serializer.is_valid(raise_exception=False)
         return Response(serializer.data)
 
     def post(self, request):
-        serializer = ProductSerializer(data=request.data)
+        serializer = ProductWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         dto = self.service.create_product(serializer.validated_data)
-        out = ProductSerializer(dto).data
+        out = ProductReadSerializer(dto).data
         return Response(out, status=status.HTTP_201_CREATED)
 
 class ProductDetailView(APIView):
@@ -27,25 +27,25 @@ class ProductDetailView(APIView):
         dto = self.service.get_product(product_id)
         if not dto:
             return error_response('NOT_FOUND', 'Product not found', {'id': str(product_id)})
-        serializer = ProductSerializer(dto)
+        serializer = ProductReadSerializer(dto)
         return Response(serializer.data)
 
     def put(self, request, product_id: int):
-        serializer = ProductSerializer(data=request.data)
+        serializer = ProductWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         dto = self.service.update_product(product_id, serializer.validated_data, partial=False)
         if not dto:
             return error_response('NOT_FOUND', 'Product not found', {'id': str(product_id)})
-        return Response(ProductSerializer(dto).data)
+        return Response(ProductReadSerializer(dto).data)
 
     def patch(self, request, product_id: int):
         dto_existing = self.service.get_product(product_id)
         if not dto_existing:
             return Response({'detail': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
-        serializer = ProductSerializer(data=request.data, partial=True)
+        serializer = ProductWriteSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         dto = self.service.update_product(product_id, serializer.validated_data, partial=True)
-        return Response(ProductSerializer(dto).data)
+        return Response(ProductReadSerializer(dto).data)
 
     def delete(self, request, product_id: int):
         deleted = self.service.delete_product(product_id)
@@ -69,12 +69,44 @@ class CategoryListView(APIView):
 class CategoryDetailView(APIView):
     service = CategoryService()
 
+    def get(self, request, category_id: int):
+        dto = self.service.get_category(category_id)
+        if not dto:
+            return error_response('NOT_FOUND', 'Category not found', {'id': str(category_id)})
+        serializer = CategorySerializer(dto)
+        return Response(serializer.data)
+
+    def put(self, request, category_id: int):
+        serializer = CategorySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        dto = self.service.update_category(category_id, serializer.validated_data)
+        if not dto:
+            return error_response('NOT_FOUND', 'Category not found', {'id': str(category_id)})
+        return Response(CategorySerializer(dto).data)
+
+    def patch(self, request, category_id: int):
+        serializer = CategorySerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        dto = self.service.update_category(category_id, serializer.validated_data)
+        if not dto:
+            return error_response('NOT_FOUND', 'Category not found', {'id': str(category_id)})
+        return Response(CategorySerializer(dto).data)
+
+    def delete(self, request, category_id: int):
+        deleted = self.service.delete_category(category_id)
+        if not deleted:
+            return error_response('NOT_FOUND', 'Category not found', {'id': str(category_id)})
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 class ProductRatingView(APIView):
     service = ProductService()
 
     def _current_user_id(self, request):
-        # Placeholder authentication extraction; replace with real auth (e.g., request.user.id)
-        # For now allow passing user id via header 'X-User-Id' or query param for testing.
+        # Use authenticated user if available
+        user = getattr(request, 'user', None)
+        if user and getattr(user, 'is_authenticated', False):
+            return user.id
+        # Fallbacks for tests if any
         uid = request.headers.get('X-User-Id') or request.query_params.get('userId')
         try:
             return int(uid) if uid is not None else None
@@ -127,30 +159,6 @@ class ProductByCategoriesView(APIView):
         if not ids:
             return Response([])
         data = self.service.list_products_by_category_ids(ids)
-        serializer = ProductSerializer(data=data, many=True)
+        serializer = ProductReadSerializer(data=data, many=True)
         serializer.is_valid(raise_exception=False)
         return Response(serializer.data)
-    def get(self, request, category_id: int):
-        dto = self.service.get_category(category_id)
-        if not dto:
-            return error_response('NOT_FOUND', 'Category not found', {'id': str(category_id)})
-        return Response(CategorySerializer(dto).data)
-    def put(self, request, category_id: int):
-        serializer = CategorySerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        dto = self.service.update_category(category_id, serializer.validated_data)
-        if not dto:
-            return error_response('NOT_FOUND', 'Category not found', {'id': str(category_id)})
-        return Response(CategorySerializer(dto).data)
-    def patch(self, request, category_id: int):
-        serializer = CategorySerializer(data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        dto = self.service.update_category(category_id, serializer.validated_data)
-        if not dto:
-            return error_response('NOT_FOUND', 'Category not found', {'id': str(category_id)})
-        return Response(CategorySerializer(dto).data)
-    def delete(self, request, category_id: int):
-        deleted = self.service.delete_category(category_id)
-        if not deleted:
-            return error_response('NOT_FOUND', 'Category not found', {'id': str(category_id)})
-        return Response(status=status.HTTP_204_NO_CONTENT)

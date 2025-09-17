@@ -1,12 +1,13 @@
 from django.urls import path, include
-from apps.catalog.views import ProductListView, ProductDetailView, CategoryListView, ProductByCategoriesView, ProductRatingView
+from apps.catalog.views import ProductListView, ProductDetailView, CategoryListView, CategoryDetailView, ProductByCategoriesView, ProductRatingView
 
 urlpatterns = [
-    path('products/', ProductListView.as_view()),
-    path('products/<int:product_id>/', ProductDetailView.as_view()),
-    path('products/<int:product_id>/rating/', ProductRatingView.as_view()),
-    path('products/by-categories/', ProductByCategoriesView.as_view()),
-    path('categories/', CategoryListView.as_view()),
+    path('products/', ProductListView.as_view(), name='api-products-list'),
+    path('products/<int:product_id>/', ProductDetailView.as_view(), name='api-products-detail'),
+    path('products/<int:product_id>/rating/', ProductRatingView.as_view(), name='api-products-rating'),
+    path('products/by-categories/', ProductByCategoriesView.as_view(), name='api-products-by-categories'),
+    path('categories/', CategoryListView.as_view(), name='api-categories-list'),
+    path('categories/<int:category_id>/', CategoryDetailView.as_view(), name='api-categories-detail'),
 
     # Other domain groupings remain namespaced
     path('users/', include('apps.users.urls')),
