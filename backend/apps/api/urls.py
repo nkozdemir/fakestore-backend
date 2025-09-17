@@ -11,4 +11,5 @@ urlpatterns = [
     # Other domain groupings remain namespaced
     path('users/', include('apps.users.urls')),
     path('carts/', include('apps.carts.urls')),
+    path('auth/', include('apps.auth.urls')),
 ]

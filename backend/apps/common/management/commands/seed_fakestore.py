@@ -119,7 +119,14 @@ class Command(BaseCommand):
 
         self.stdout.write('Seeding users...')
         for uid, fn, ln, email, username, pwd, phone in USERS:
-            User.objects.get_or_create(id=uid, defaults=dict(firstname=fn, lastname=ln, email=email, username=username, password=pwd, phone=phone))
+            user, created = User.objects.get_or_create(id=uid, defaults=dict(firstname=fn, lastname=ln, email=email, username=username, phone=phone))
+            if created:
+                user.set_password(pwd)
+                user.save()
+            else:
+                # If user exists, update password to ensure it's hashed
+                user.set_password(pwd)
+                user.save()
 
         self.stdout.write('Seeding addresses...')
         for user_id, street, number, city, zipcode, lat, lon in ADDRESSES:
