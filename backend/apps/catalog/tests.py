@@ -119,3 +119,50 @@ class TestProductCategoryRating(APITestCase):
         response = self.client.delete(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIsNone(response.data['userRating'])
+
+    def test_list_products_filter_by_category(self):
+        # Create category and assign to product
+        c = Category.objects.create(name='Electronics')
+        p = Product.objects.create(**self.product_data)
+        p.categories.add(c)
+        # Matching filter
+        res1 = self.client.get(self.product_url + '?category=Electronics')
+        self.assertEqual(res1.status_code, status.HTTP_200_OK)
+        self.assertTrue(any(item['id'] == p.id for item in res1.data))
+        # Non-matching filter
+        res2 = self.client.get(self.product_url + '?category=Books')
+        self.assertEqual(res2.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(res2.data), 0)
+
+    def test_products_by_categories_endpoint(self):
+        c1 = Category.objects.create(name='A')
+        c2 = Category.objects.create(name='B')
+        p1 = Product.objects.create(id=2, title='P2', price=50.00, description='d', image='', rate=0, count=0)
+        p2 = Product.objects.create(id=3, title='P3', price=60.00, description='d', image='', rate=0, count=0)
+        p1.categories.add(c1)
+        p2.categories.add(c2)
+        # both categories
+        res = self.client.get(reverse('api-products-by-categories') + f'?categoryIds={c1.id},{c2.id}')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        ids = {item['id'] for item in res.data}
+        self.assertTrue({p1.id, p2.id}.issubset(ids))
+        # empty param
+        res_empty = self.client.get(reverse('api-products-by-categories'))
+        self.assertEqual(res_empty.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_empty.data, [])
+        # invalid param
+        res_invalid = self.client.get(reverse('api-products-by-categories') + '?categoryIds=a,b')
+        self.assertEqual(res_invalid.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('error', res_invalid.data)
+
+    def test_error_envelope_not_found(self):
+        # product not found
+        res_p = self.client.get(reverse('api-products-detail', args=[9999]))
+        self.assertEqual(res_p.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertIn('error', res_p.data)
+        self.assertEqual(res_p.data['error']['code'], 'NOT_FOUND')
+        # category not found
+        res_c = self.client.get(reverse('api-categories-detail', args=[9999]))
+        self.assertEqual(res_c.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertIn('error', res_c.data)
+        self.assertEqual(res_c.data['error']['code'], 'NOT_FOUND')

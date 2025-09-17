@@ -165,6 +165,53 @@ python backend/manage.py migrate
 python backend/manage.py runserver
 ```
 
+## Testing
+
+Unit tests are provided for all main API areas and run against SQLite automatically (tests switch DB in settings when `test` is in `sys.argv`).
+
+Covered areas and endpoints:
+- Auth
+  - `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/refresh`, `GET /api/auth/me`, `POST /api/auth/logout`, `POST /api/auth/logout-all`
+- Catalog
+  - Products: `GET/POST /api/products/`, `GET/PUT/PATCH/DELETE /api/products/:id/`
+  - Filters: `GET /api/products/?category=...`, `GET /api/products/by-categories/?categoryIds=1,2` (valid/empty/invalid)
+  - Categories: `GET/POST /api/categories/`, `GET/PUT/PATCH/DELETE /api/categories/:id/`
+  - Ratings: `GET/POST/DELETE /api/products/:id/rating/`
+  - Error envelope: 404 and validation error cases
+- Carts
+  - `GET/POST /api/carts/`, `GET/PUT/PATCH/DELETE /api/carts/:id/`
+  - PATCH operations: `add`, `update`, `remove`, `date`, `userId`
+- Users
+  - `GET/POST /api/users/`, `GET/PUT/PATCH/DELETE /api/users/:id/`
+
+Test file locations:
+- `backend/apps/auth/tests.py`
+- `backend/apps/catalog/tests.py`
+- `backend/apps/carts/tests.py`
+- `backend/apps/users/tests.py`
+
+Run tests (reliable options):
+- Using dotted test modules (most robust):
+```bash
+python backend/manage.py test apps.auth.tests apps.catalog.tests apps.carts.tests apps.users.tests -v 2
+```
+- Using app labels (note the custom auth app label to avoid clashing with `django.contrib.auth`):
+```bash
+python backend/manage.py test fakestore_auth catalog carts users -v 2
+```
+- From inside the backend folder:
+```bash
+cd backend
+python manage.py test fakestore_auth catalog carts users -v 2
+```
+
+Why `python backend/manage.py test` may show "Found 0 test(s)":
+- Depending on environment/app label resolution, bare discovery may miss tests. Prefer the commands above using dotted modules or the explicit app labels (especially `fakestore_auth`).
+
+Notes:
+- DRF test client is used with `format='json'` for all JSON requests.
+- Tests authenticate via JWT where needed (using the login endpoint and attaching the `Authorization: Bearer <token>` header).
+
 ## Notes
 - Unified seeding command: `python manage.py seed_fakestore [--flush]` loads the full dataset (products, users, addresses, carts, cart items).
 - Repositories intentionally thin; add caching, soft delete, or query specifications as complexity grows.
@@ -172,4 +219,3 @@ python backend/manage.py runserver
 - Future enhancements: pagination, authentication, rate limiting, category/product validation details, global exception handler for SERVER_ERROR wrapping.
 
 ## License
-MIT (adjust as needed)

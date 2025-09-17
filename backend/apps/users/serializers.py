@@ -2,7 +2,7 @@ from rest_framework import serializers
 from .dtos import UserDTO, AddressDTO
 
 class AddressSerializer(serializers.Serializer):
-    id = serializers.IntegerField()
+    id = serializers.IntegerField(read_only=True)
     street = serializers.CharField()
     number = serializers.IntegerField()
     city = serializers.CharField()
@@ -11,10 +11,10 @@ class AddressSerializer(serializers.Serializer):
     longitude = serializers.CharField()
 
 class UserSerializer(serializers.Serializer):
-    id = serializers.IntegerField()
+    id = serializers.IntegerField(read_only=True)
     firstname = serializers.CharField()
     lastname = serializers.CharField()
     email = serializers.CharField()
     username = serializers.CharField()
     phone = serializers.CharField()
-    addresses = AddressSerializer(many=True)
+    addresses = AddressSerializer(many=True, read_only=True)

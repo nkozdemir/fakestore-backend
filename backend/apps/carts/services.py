@@ -19,6 +19,12 @@ class CartService:
         return cart_to_dto(c) if c else None
 
     def create_cart(self, data: Dict[str, Any]):
+        data = dict(data)
+        # Remove non-model fields
+        data.pop('items', None)
+        # Normalize date (accept ISO string)
+        if isinstance(data.get('date'), str) and 'T' in data['date']:
+            data['date'] = data['date'].split('T')[0]
         cart: Cart = self.carts.create(**data)
         return cart_to_dto(cart)
 
@@ -26,6 +32,10 @@ class CartService:
         cart: Optional[Cart] = self.carts.get(id=cart_id)
         if not cart:
             return None
+        data = dict(data)
+        data.pop('items', None)
+        if isinstance(data.get('date'), str) and 'T' in data['date']:
+            data['date'] = data['date'].split('T')[0]
         for k, v in data.items():
             setattr(cart, k, v)
         cart.save()
