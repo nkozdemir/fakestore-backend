@@ -167,7 +167,7 @@ python backend/manage.py runserver
 
 ## Testing
 
-Unit tests are provided for all main API areas and run against SQLite automatically (tests switch DB in settings when `test` is in `sys.argv`).
+Unit tests are provided for all main API areas and run against SQLite automatically (tests switch DB in settings when `test` is in `sys.argv`). Tests now live under per-app `tests/` packages for consistent discovery.
 
 Covered areas and endpoints:
 - Auth
@@ -185,13 +185,13 @@ Covered areas and endpoints:
   - `GET/POST /api/users/`, `GET/PUT/PATCH/DELETE /api/users/:id/`
 
 Test file locations:
-- `backend/apps/auth/tests.py`
-- `backend/apps/catalog/tests.py`
-- `backend/apps/carts/tests.py`
-- `backend/apps/users/tests.py`
+- `backend/apps/auth/tests/test_auth.py`
+- `backend/apps/catalog/tests/test_catalog.py`
+- `backend/apps/carts/tests/test_carts.py`
+- `backend/apps/users/tests/test_users.py`
 
 Run tests (reliable options):
-- Using dotted test modules (most robust):
+- Using dotted test modules (most robust; avoids ambiguous `tests` import):
 ```bash
 python backend/manage.py test apps.auth.tests apps.catalog.tests apps.carts.tests apps.users.tests -v 2
 ```
@@ -205,8 +205,9 @@ cd backend
 python manage.py test fakestore_auth catalog carts users -v 2
 ```
 
-Why `python backend/manage.py test` may show "Found 0 test(s)":
-- Depending on environment/app label resolution, bare discovery may miss tests. Prefer the commands above using dotted modules or the explicit app labels (especially `fakestore_auth`).
+Notes on bare discovery and ImportError:
+- Running `python backend/manage.py test -v 2` may sometimes raise `ImportError: 'tests' module incorrectly imported...` when the environment has a top-level `tests` module installed. This is a unittest discovery quirk when a package named `tests` is imported without its full package path.
+- Use one of the commands above (dotted modules or explicit app labels) to ensure Python imports `apps.<app>.tests` and not a global `tests` package.
 
 Notes:
 - DRF test client is used with `format='json'` for all JSON requests.
