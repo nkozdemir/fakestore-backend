@@ -37,7 +37,8 @@ class TestProductCategoryRating(APITestCase):
         Product.objects.create(**self.product_data)
         response = self.client.get(self.product_url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertTrue(len(response.data) >= 1)
+        self.assertIn('results', response.data)
+        self.assertTrue(len(response.data['results']) >= 1)
 
     def test_get_product_detail(self):
         product = Product.objects.create(**self.product_data)
@@ -128,11 +129,26 @@ class TestProductCategoryRating(APITestCase):
         # Matching filter
         res1 = self.client.get(self.product_url + '?category=Electronics')
         self.assertEqual(res1.status_code, status.HTTP_200_OK)
-        self.assertTrue(any(item['id'] == p.id for item in res1.data))
+        self.assertTrue(any(item['id'] == p.id for item in res1.data['results']))
         # Non-matching filter
         res2 = self.client.get(self.product_url + '?category=Books')
         self.assertEqual(res2.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(res2.data), 0)
+        self.assertIn('results', res2.data)
+        self.assertEqual(len(res2.data['results']), 0)
+
+    def test_list_products_pagination_params(self):
+        # Create 12 products total
+        for i in range(1, 13):
+            Product.objects.create(id=100 + i, title=f'P{i}', price=10.0 + i, description='d', image='', rate=0, count=0)
+        # Request page=2 with limit=5
+        res = self.client.get(self.product_url + '?page=2&limit=5')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data['count'], 12)
+        self.assertEqual(len(res.data['results']), 5)
+        # page 3 should have the remaining 2
+        res3 = self.client.get(self.product_url + '?page=3&limit=5')
+        self.assertEqual(res3.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(res3.data['results']), 2)
 
     def test_products_by_categories_endpoint(self):
         c1 = Category.objects.create(name='A')

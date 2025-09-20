@@ -78,6 +78,20 @@ Body (create/update example):
 }
 ```
 
+Pagination (Products list):
+- Query params: `page` (default 1), `limit` (default 10, max 100)
+- Response shape:
+```jsonc
+{
+  "count": 57,
+  "next": "http://localhost:8000/api/products/?page=2&limit=10",
+  "previous": null,
+  "results": [
+    { "id": 1, "title": "...", "price": 12.99, ... }
+  ]
+}
+```
+
 ### Categories
 - `GET /api/categories/`
 - `POST /api/categories/`

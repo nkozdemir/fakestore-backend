@@ -1,18 +1,23 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.pagination import PageNumberPagination
 from .services import ProductService, CategoryService
 from .serializers import ProductReadSerializer, ProductWriteSerializer, CategorySerializer
 from apps.api.utils import error_response
+from .pagination import ProductListPagination
 
 class ProductListView(APIView):
     service = ProductService()
     def get(self, request):
         category = request.query_params.get('category')
+        # Fetch all DTOs (list of dicts) then paginate the list in-memory
         data = self.service.list_products(category=category)
-        serializer = ProductReadSerializer(data=data, many=True)
+        paginator = ProductListPagination()
+        page = paginator.paginate_queryset(data, request, view=self)
+        serializer = ProductReadSerializer(data=page, many=True)
         serializer.is_valid(raise_exception=False)
-        return Response(serializer.data)
+        return paginator.get_paginated_response(serializer.data)
 
     def post(self, request):
         serializer = ProductWriteSerializer(data=request.data)
