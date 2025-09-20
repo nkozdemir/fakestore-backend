@@ -58,14 +58,32 @@ docker compose exec web python manage.py seed_fakestore --flush
 
 Base path: `/api/`
 
+Authentication & Permissions
+- JWT is required for write operations on most resources. Public GETs are allowed unless noted.
+- Auth endpoints:
+  - Public: `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/refresh`
+  - Auth required: `GET /api/auth/me`, `POST /api/auth/logout`, `POST /api/auth/logout-all`
+- Products & Categories: Public GETs; POST/PUT/PATCH/DELETE require auth
+- Users: Public GETs; POST/PUT/PATCH/DELETE require auth
+- Carts: Public GETs; POST/PUT/PATCH/DELETE require auth
+- Special cases:
+  - `GET /api/products/by-categories/`: Public
+  - Product ratings `GET`: Public summary; `POST`/`DELETE`: Auth required
+
+Attach a JWT access token for protected routes using the `Authorization: Bearer <token>` header.
+
 ### Products
-- `GET /api/products/` (optional `?category=electronics`)
-- `GET /api/products/by-categories/?categoryIds=1,2,3` (filter by one or more category IDs)
-- `POST /api/products/`
-- `GET /api/products/<id>/`
-- `PUT /api/products/<id>/`
-- `PATCH /api/products/<id>/`
-- `DELETE /api/products/<id>/`
+- Public: `GET /api/products/` (optional `?category=electronics`)
+- Public: `GET /api/products/by-categories/?categoryIds=1,2,3` (filter by one or more category IDs)
+- Auth required: `POST /api/products/`
+- Public: `GET /api/products/<id>/`
+- Auth required: `PUT /api/products/<id>/`
+- Auth required: `PATCH /api/products/<id>/`
+- Auth required: `DELETE /api/products/<id>/`
+- Ratings:
+  - Public: `GET /api/products/<id>/rating/`
+  - Auth required: `POST /api/products/<id>/rating/` (set/update user rating)
+  - Auth required: `DELETE /api/products/<id>/rating/` (remove user rating)
 
 Body (create/update example):
 ```json
@@ -93,28 +111,28 @@ Pagination (Products list):
 ```
 
 ### Categories
-- `GET /api/categories/`
-- `POST /api/categories/`
-- `GET /api/categories/<id>/`
-- `PUT /api/categories/<id>/`
-- `PATCH /api/categories/<id>/`
-- `DELETE /api/categories/<id>/`
+- Public: `GET /api/categories/`
+- Auth required: `POST /api/categories/`
+- Public: `GET /api/categories/<id>/`
+- Auth required: `PUT /api/categories/<id>/`
+- Auth required: `PATCH /api/categories/<id>/`
+- Auth required: `DELETE /api/categories/<id>/`
 
 ### Users
-- `GET /api/users/`
-- `POST /api/users/`
-- `GET /api/users/<id>/`
-- `PUT /api/users/<id>/`
-- `PATCH /api/users/<id>/`
-- `DELETE /api/users/<id>/`
+- Public: `GET /api/users/`
+- Auth required: `POST /api/users/`
+- Public: `GET /api/users/<id>/`
+- Auth required: `PUT /api/users/<id>/`
+- Auth required: `PATCH /api/users/<id>/`
+- Auth required: `DELETE /api/users/<id>/`
 
 ### Carts
-- `GET /api/carts/` (optional `?user_id=1`)
-- `POST /api/carts/`
-- `GET /api/carts/<id>/`
-- `PUT /api/carts/<id>/`
-- `PATCH /api/carts/<id>/` (advanced item operations)
-- `DELETE /api/carts/<id>/`
+- Public: `GET /api/carts/` (optional `?user_id=1`)
+- Auth required: `POST /api/carts/`
+- Public: `GET /api/carts/<id>/`
+- Auth required: `PUT /api/carts/<id>/`
+- Auth required: `PATCH /api/carts/<id>/` (advanced item operations)
+- Auth required: `DELETE /api/carts/<id>/`
 
 Cart PATCH payload supports combined operations (executed in order add → update → remove):
 ```json

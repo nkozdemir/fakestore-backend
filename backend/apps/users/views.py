@@ -4,8 +4,10 @@ from rest_framework import status
 from .services import UserService
 from .serializers import UserSerializer
 from apps.api.utils import error_response
+from rest_framework.permissions import IsAuthenticatedOrReadOnly
 
 class UserListView(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
     service = UserService()
     def get(self, request):
         data = self.service.list_users()
@@ -19,6 +21,7 @@ class UserListView(APIView):
         return Response(UserSerializer(dto).data, status=status.HTTP_201_CREATED)
 
 class UserDetailView(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
     service = UserService()
     def get(self, request, user_id: int):
         dto = self.service.get_user(user_id)

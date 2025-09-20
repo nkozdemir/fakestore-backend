@@ -2,12 +2,14 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly
 from .services import ProductService, CategoryService
 from .serializers import ProductReadSerializer, ProductWriteSerializer, CategorySerializer
 from apps.api.utils import error_response
 from .pagination import ProductListPagination
 
 class ProductListView(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
     service = ProductService()
     def get(self, request):
         category = request.query_params.get('category')
@@ -27,6 +29,7 @@ class ProductListView(APIView):
         return Response(out, status=status.HTTP_201_CREATED)
 
 class ProductDetailView(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
     service = ProductService()
     def get(self, request, product_id: int):
         dto = self.service.get_product(product_id)
@@ -59,6 +62,7 @@ class ProductDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 class CategoryListView(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
     service = CategoryService()
     def get(self, request):
         data = self.service.list_categories()
@@ -72,6 +76,7 @@ class CategoryListView(APIView):
         return Response(CategorySerializer(dto).data, status=status.HTTP_201_CREATED)
 
 class CategoryDetailView(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
     service = CategoryService()
 
     def get(self, request, category_id: int):
@@ -104,6 +109,7 @@ class CategoryDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 class ProductRatingView(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
     service = ProductService()
 
     def _current_user_id(self, request):
@@ -151,6 +157,7 @@ class ProductRatingView(APIView):
         return Response(result, status=status.HTTP_200_OK)
 
 class ProductByCategoriesView(APIView):
+    permission_classes = [AllowAny]
     service = ProductService()
     def get(self, request):
         raw = request.query_params.get('categoryIds')

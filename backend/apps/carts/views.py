@@ -5,6 +5,7 @@ from .services import CartService
 from .serializers import CartReadSerializer, CartWriteSerializer
 from apps.api.utils import error_response
 from rest_framework import serializers
+from rest_framework.permissions import IsAuthenticatedOrReadOnly
 
 class CartPatchSerializer(serializers.Serializer):
     add = serializers.ListField(child=serializers.DictField(), required=False)
@@ -14,6 +15,7 @@ class CartPatchSerializer(serializers.Serializer):
     userId = serializers.IntegerField(required=False)
 
 class CartListView(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
     service = CartService()
     def get(self, request):
         user_id = request.query_params.get('user_id')
@@ -28,6 +30,7 @@ class CartListView(APIView):
         return Response(CartReadSerializer(dto).data, status=status.HTTP_201_CREATED)
 
 class CartDetailView(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
     service = CartService()
     def get(self, request, cart_id: int):
         dto = self.service.get_cart(cart_id)
