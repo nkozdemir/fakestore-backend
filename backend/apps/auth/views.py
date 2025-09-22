@@ -7,11 +7,26 @@ from rest_framework_simplejwt.tokens import RefreshToken, OutstandingToken, Blac
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from django.contrib.auth.hashers import make_password
 from apps.api.utils import error_response
+from drf_spectacular.utils import extend_schema, OpenApiResponse
+from apps.api.schemas import ErrorResponseSerializer
+from .serializers import (
+    RegisterRequestSerializer,
+    RegisterResponseSerializer,
+    MeResponseSerializer,
+    LogoutRequestSerializer,
+    DetailResponseSerializer,
+)
 
 User = get_user_model()
 
+@extend_schema(tags=["Auth"])
 class RegisterView(APIView):
     permission_classes = [AllowAny]
+    @extend_schema(
+        summary="Register user",
+        request=RegisterRequestSerializer,
+        responses={201: RegisterResponseSerializer, 400: OpenApiResponse(response=ErrorResponseSerializer)},
+    )
     def post(self, request):
         data = request.data.copy()
         required = ['username', 'email', 'password', 'first_name', 'last_name']
@@ -32,12 +47,15 @@ class RegisterView(APIView):
         user = User.objects.create(**payload, password=data['password'])
         return Response({'id': user.id, 'username': user.username, 'email': user.email}, status=status.HTTP_201_CREATED)
 
+@extend_schema(tags=["Auth"], summary="Login (JWT obtain pair)")
 class LoginView(TokenObtainPairView):
     permission_classes = [AllowAny]
 
+@extend_schema(tags=["Auth"], summary="Refresh JWT")
 class RefreshView(TokenRefreshView):
     permission_classes = [AllowAny]
 
+@extend_schema(tags=["Auth"], summary="Get current user", responses={200: MeResponseSerializer})
 class MeView(APIView):
     permission_classes = [IsAuthenticated]
     def get(self, request):
@@ -52,8 +70,10 @@ class MeView(APIView):
             'is_superuser': user.is_superuser,
         })
 
+@extend_schema(tags=["Auth"])
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
+    @extend_schema(summary="Logout (blacklist refresh)", request=LogoutRequestSerializer, responses={200: DetailResponseSerializer, 400: OpenApiResponse(response=ErrorResponseSerializer)})
     def post(self, request):
         try:
             refresh_token = request.data.get('refresh')
@@ -63,8 +83,17 @@ class LogoutView(APIView):
         except Exception as e:
             return error_response('VALIDATION_ERROR', 'Invalid token', {'error': str(e)})
 
+@extend_schema(tags=["Auth"], summary="Logout from all devices", responses={200: DetailResponseSerializer})
 class LogoutAllView(APIView):
     permission_classes = [IsAuthenticated]
+    @extend_schema(
+        summary="Logout from all devices",
+        request=None,
+        responses={
+            200: DetailResponseSerializer,
+            401: OpenApiResponse(response=ErrorResponseSerializer),
+        },
+    )
     def post(self, request):
         user = request.user
         tokens = OutstandingToken.objects.filter(user=user)

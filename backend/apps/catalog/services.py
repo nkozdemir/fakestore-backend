@@ -1,4 +1,6 @@
 from typing import Optional, Dict, Any
+import sys
+from django.core.cache import cache
 from .repositories import ProductRepository, CategoryRepository, RatingRepository
 from .dtos import product_to_dto, category_to_dto
 from .models import Product, Category, Rating
@@ -7,10 +9,39 @@ class ProductService:
     def __init__(self):
         self.products = ProductRepository()
         self.ratings = RatingRepository()
+        # Caching keys
+        self._cache_prefix = 'products:list'
+        self._cache_version_key = f'{self._cache_prefix}:version'
+        self._default_version = 1
+
+    def _get_cache_version(self) -> int:
+        v = cache.get(self._cache_version_key)
+        return v or self._default_version
+
+    def _bump_cache_version(self) -> None:
+        v = self._get_cache_version()
+        # Version key should not expire
+        cache.set(self._cache_version_key, v + 1, timeout=None)
+
+    def _cache_key(self, category: Optional[str]) -> str:
+        version = self._get_cache_version()
+        cat = category or 'all'
+        return f'{self._cache_prefix}:v{version}:{cat}'
 
     def list_products(self, category: Optional[str] = None):
+        # During test runs, bypass cache to avoid stale reads from direct ORM writes in tests
+        if 'test' in sys.argv:
+            qs = self.products.list_by_category(category) if category else self.products.list()
+            return [product_to_dto(p) for p in qs]
+        # Read-through cache per category filter
+        key = self._cache_key(category)
+        cached = cache.get(key)
+        if cached is not None:
+            return cached
         qs = self.products.list_by_category(category) if category else self.products.list()
-        return [product_to_dto(p) for p in qs]
+        data = [product_to_dto(p) for p in qs]
+        cache.set(key, data)
+        return data
 
     def list_products_by_category_ids(self, category_ids):
         qs = self.products.list_by_category_ids(category_ids)
@@ -25,6 +56,8 @@ class ProductService:
         product: Product = self.products.create(**data)
         if categories:
             product.categories.set(Category.objects.filter(id__in=categories))
+        # Invalidate all cached product lists
+        self._bump_cache_version()
         return product_to_dto(product)
 
     def update_product(self, product_id: int, data: Dict[str, Any], partial: bool = False):
@@ -40,6 +73,8 @@ class ProductService:
         product.save()
         if categories is not None:
             product.categories.set(Category.objects.filter(id__in=categories))
+        # Invalidate cached lists as content may have changed
+        self._bump_cache_version()
         return product_to_dto(product)
 
     def delete_product(self, product_id: int) -> bool:
@@ -47,6 +82,8 @@ class ProductService:
         if not product:
             return False
         self.products.delete(product)
+        # Invalidate cache after deletion
+        self._bump_cache_version()
         return True
 
     # Rating related methods

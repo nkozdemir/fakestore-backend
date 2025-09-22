@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand
-from django.db import transaction
+from django.db import transaction, connection
+from django.core.management.color import no_style
 from apps.catalog.models import Category, Product, ProductCategory
 from apps.users.models import User, Address
 from apps.carts.models import Cart, CartProduct
@@ -95,6 +96,14 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *args, **options):
+        def reset_sequences(models):
+            """Reset database sequences for given models (PostgreSQL, etc.)."""
+            sql_list = connection.ops.sequence_reset_sql(no_style(), models)
+            if not sql_list:
+                return
+            with connection.cursor() as cursor:
+                for sql in sql_list:
+                    cursor.execute(sql)
         if options['flush']:
             self.stdout.write('Flushing existing data...')
             CartProduct.objects.all().delete()
@@ -128,6 +137,11 @@ class Command(BaseCommand):
                 user.set_password(pwd)
                 user.save()
 
+        # Important: After inserting explicit IDs, reset the user ID sequence so
+        # future inserts (e.g., via the API) don't try to reuse an existing PK.
+        # We'll reset sequences for models that may rely on DB sequences
+        # after we've finished inserting all explicit IDs.
+
         self.stdout.write('Seeding addresses...')
         for user_id, street, number, city, zipcode, lat, lon in ADDRESSES:
             user = User.objects.get(id=user_id)
@@ -159,5 +173,9 @@ class Command(BaseCommand):
                 existing_product_ids.add(product_id)
             product = Product.objects.get(id=product_id)
             CartProduct.objects.get_or_create(cart=cart, product=product, defaults=dict(quantity=qty))
+
+        # After inserting explicit IDs, reset sequences for these models so future
+        # inserts use the next available ID (prevents duplicate key IntegrityError).
+        reset_sequences([User, Product, Cart])
 
         self.stdout.write(self.style.SUCCESS('FakeStore seed completed.'))

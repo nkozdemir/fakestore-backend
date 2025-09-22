@@ -6,6 +6,8 @@ class User(AbstractUser):
     firstname = models.CharField(max_length=100)
     lastname = models.CharField(max_length=100)
     phone = models.CharField(max_length=50, blank=True, null=True)
+    # Ensure email uniqueness across users
+    email = models.EmailField(unique=True)
 
     def __str__(self):
         return self.username

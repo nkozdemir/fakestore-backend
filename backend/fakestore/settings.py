@@ -97,12 +97,36 @@ DATABASES = {
     }
 }
 
+# Caching (Redis by default)
+REDIS_URL = os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/1')
+CACHE_TTL = int(os.getenv('CACHE_TTL', '300'))  # seconds
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': REDIS_URL,
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+        },
+        'KEY_PREFIX': os.getenv('CACHE_KEY_PREFIX', 'fakestore'),
+        'TIMEOUT': CACHE_TTL,
+    }
+}
+
 # Use SQLite for tests to simplify CI/dev without Postgres
 if 'test' in sys.argv:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
+    # Use local in-memory cache during tests
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'fakestore-test-cache',
+            'TIMEOUT': 60,
         }
     }
 
