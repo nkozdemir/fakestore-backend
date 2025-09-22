@@ -1,9 +1,10 @@
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from django.db import transaction
 from .repositories import CartRepository, CartProductRepository
 from .dtos import cart_to_dto
 from .models import Cart, CartProduct
 from apps.catalog.models import Product
+from django.utils import timezone
 
 class CartService:
     def __init__(self):
@@ -19,34 +20,106 @@ class CartService:
         return cart_to_dto(c) if c else None
 
     def create_cart(self, data: Dict[str, Any]):
-        data = dict(data)
-        # Remove non-model fields
-        data.pop('items', None)
-        # Normalize date (accept ISO string)
-        if isinstance(data.get('date'), str) and 'T' in data['date']:
-            data['date'] = data['date'].split('T')[0]
-        cart: Cart = self.carts.create(**data)
+        payload = dict(data)
+        # Map camelCase to model fields
+        user_id = payload.get('userId') or payload.get('user_id')
+        date = payload.get('date')
+        products: Optional[List[Dict[str, Any]]] = payload.get('products')
+
+        create_kwargs: Dict[str, Any] = {}
+        if user_id is not None:
+            create_kwargs['user_id'] = int(user_id)
+        # Default date to today if not provided
+        if isinstance(date, str):
+            create_kwargs['date'] = date.split('T')[0]
+        else:
+            create_kwargs['date'] = timezone.now().date()
+
+        # ID will be auto-assigned by database sequence; do not pass it
+        with transaction.atomic():
+            cart: Cart = self.carts.create(**create_kwargs)
+            # If initial products provided, create line items
+            if products:
+                for item in products:
+                    pid = item.get('productId')
+                    qty = int(item.get('quantity', 0))
+                    if not pid or qty <= 0:
+                        continue
+                    product = Product.objects.filter(id=pid).first()
+                    if not product:
+                        continue
+                    CartProduct.objects.create(cart=cart, product=product, quantity=qty)
         return cart_to_dto(cart)
 
     def update_cart(self, cart_id: int, data: Dict[str, Any]):
         cart: Optional[Cart] = self.carts.get(id=cart_id)
         if not cart:
             return None
-        data = dict(data)
-        data.pop('items', None)
-        if isinstance(data.get('date'), str) and 'T' in data['date']:
-            data['date'] = data['date'].split('T')[0]
-        for k, v in data.items():
-            setattr(cart, k, v)
-        cart.save()
-        return cart_to_dto(cart)
+        payload = dict(data)
+        # Extract items for full replacement if provided (including empty list to clear)
+        items = payload.pop('items', None)
+        # Normalize date (accept ISO string with time)
+        if isinstance(payload.get('date'), str) and 'T' in payload['date']:
+            payload['date'] = payload['date'].split('T')[0]
 
-    def delete_cart(self, cart_id: int) -> bool:
-        cart = self.carts.get(id=cart_id)
-        if not cart:
+        # Only allow known fields on cart
+        updates: Dict[str, Any] = {}
+        if 'user_id' in payload and payload['user_id'] is not None:
+            try:
+                updates['user_id'] = int(payload['user_id'])
+            except (ValueError, TypeError):
+                pass
+        if 'date' in payload and payload['date']:
+            updates['date'] = payload['date']
+
+        with transaction.atomic():
+            # Update scalar fields first
+            for k, v in updates.items():
+                setattr(cart, k, v)
+            cart.save()
+
+            # If 'items' key was supplied, perform full replacement
+            if items is not None:
+                # Clear existing items
+                CartProduct.objects.filter(cart=cart).delete()
+                # Recreate items from payload
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    pid = item.get('productId') or item.get('product_id')
+                    if not pid and isinstance(item.get('product'), dict):
+                        pid = item['product'].get('id')
+                    try:
+                        qty = int(item.get('quantity', 0))
+                    except (ValueError, TypeError):
+                        qty = 0
+                    if not pid or qty <= 0:
+                        continue
+                    product = Product.objects.filter(id=pid).first()
+                    if not product:
+                        continue
+                    CartProduct.objects.create(cart=cart, product=product, quantity=qty)
+
+        # Refresh for DTO after transactional updates
+        refreshed = self.carts.get(id=cart_id)
+        return cart_to_dto(refreshed)
+
+    def delete_cart(self, cart_id: int, user_id: Optional[int] = None) -> bool:
+        """Hard-delete a cart in an explicit order: first its products, then the cart.
+        If user_id is provided, the operation is scoped to the owner's cart.
+        Returns True iff the cart row was deleted.
+        """
+        cart_qs = Cart.objects.filter(id=cart_id)
+        if user_id is not None:
+            cart_qs = cart_qs.filter(user_id=user_id)
+        if not cart_qs.exists():
             return False
-        self.carts.delete(cart)
-        return True
+        with transaction.atomic():
+            # 1) Delete cart products first
+            CartProduct.objects.filter(cart_id=cart_id).delete()
+            # 2) Delete the cart itself
+            deleted_count, _ = cart_qs.delete()
+        return deleted_count > 0
 
     def patch_operations(self, cart_id: int, ops: Dict[str, Any]):
         """Apply add/update/remove operations on cart line items.

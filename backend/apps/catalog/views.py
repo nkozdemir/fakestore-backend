@@ -163,13 +163,18 @@ class ProductRatingView(APIView):
         if user and getattr(user, 'is_authenticated', False):
             return user.id
         # Fallbacks for tests if any
+        # Prefer camelCase userId; keep header fallback for tests
         uid = request.headers.get('X-User-Id') or request.query_params.get('userId')
         try:
             return int(uid) if uid is not None else None
         except ValueError:
             return None
 
-    @extend_schema(summary="Get rating summary", responses={200: None, 404: OpenApiResponse(response=ErrorResponseSerializer)})
+    @extend_schema(
+        summary="Get rating summary",
+        parameters=[OpenApiParameter(name="userId", description="User ID (optional fallback when not authenticated)", required=False, type=int)],
+        responses={200: None, 404: OpenApiResponse(response=ErrorResponseSerializer)}
+    )
     def get(self, request, product_id: int):
         user_id = self._current_user_id(request)
         summary = self.service.get_rating_summary(product_id, user_id)
@@ -177,7 +182,12 @@ class ProductRatingView(APIView):
             return error_response('NOT_FOUND', 'Product not found', {'id': str(product_id)})
         return Response(summary)
 
-    @extend_schema(summary="Set user rating", request=None, responses={201: None, 400: OpenApiResponse(response=ErrorResponseSerializer), 404: OpenApiResponse(response=ErrorResponseSerializer)})
+    @extend_schema(
+        summary="Set user rating",
+        parameters=[OpenApiParameter(name="userId", description="User ID (optional fallback when not authenticated)", required=False, type=int)],
+        request=None,
+        responses={201: None, 400: OpenApiResponse(response=ErrorResponseSerializer), 404: OpenApiResponse(response=ErrorResponseSerializer)}
+    )
     def post(self, request, product_id: int):
         user_id = self._current_user_id(request)
         if not user_id:
@@ -193,7 +203,11 @@ class ProductRatingView(APIView):
             return error_response(code, msg, details)
         return Response(result, status=status.HTTP_201_CREATED)
 
-    @extend_schema(summary="Delete user rating", responses={200: None, 400: OpenApiResponse(response=ErrorResponseSerializer), 404: OpenApiResponse(response=ErrorResponseSerializer)})
+    @extend_schema(
+        summary="Delete user rating",
+        parameters=[OpenApiParameter(name="userId", description="User ID (optional fallback when not authenticated)", required=False, type=int)],
+        responses={200: None, 400: OpenApiResponse(response=ErrorResponseSerializer), 404: OpenApiResponse(response=ErrorResponseSerializer)}
+    )
     def delete(self, request, product_id: int):
         user_id = self._current_user_id(request)
         if not user_id:
@@ -210,7 +224,7 @@ class ProductByCategoriesView(APIView):
     service = ProductService()
     @extend_schema(
         summary="List products by categories",
-        parameters=[OpenApiParameter(name="categoryIds", description="Comma-separated category IDs", required=True, type=str)],
+        parameters=[OpenApiParameter(name="categoryIds", description="Comma-separated category IDs (camelCase)", required=True, type=str)],
         responses={200: ProductReadSerializer(many=True), 400: OpenApiResponse(response=ErrorResponseSerializer)},
     )
     def get(self, request):

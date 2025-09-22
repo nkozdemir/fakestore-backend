@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional
 ERROR_STATUS_MAP = {
     'NOT_FOUND': status.HTTP_404_NOT_FOUND,
     'VALIDATION_ERROR': status.HTTP_400_BAD_REQUEST,
+    'UNAUTHORIZED': status.HTTP_401_UNAUTHORIZED,
     'SERVER_ERROR': status.HTTP_500_INTERNAL_SERVER_ERROR,
 }
 

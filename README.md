@@ -127,7 +127,8 @@ Pagination (Products list):
 - Auth required: `DELETE /api/users/<id>/`
 
 ### Carts
-- Public: `GET /api/carts/` (optional `?user_id=1`)
+- Public: `GET /api/carts/` (optional `?userId=1`)
+- Public: `GET /api/carts/users/<user_id>/` (list carts for a specific user)
 - Auth required: `POST /api/carts/`
 - Public: `GET /api/carts/<id>/`
 - Auth required: `PUT /api/carts/<id>/`
@@ -150,6 +151,8 @@ Rules:
 - remove: deletes line items by productId
 - date: ISO date/datetime string (date part stored)
 - userId: reassign cart to another user (no auth rules yet)
+
+Compatibility: older `user_id` query param is still accepted, but `userId` is preferred and documented.
 
 ### Error Envelope
 All error responses use a consistent structure:

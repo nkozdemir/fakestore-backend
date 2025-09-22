@@ -27,8 +27,6 @@ class AddressWriteSerializer(serializers.Serializer):
 
 class UserSerializer(serializers.Serializer):
     id = serializers.IntegerField(read_only=True)
-    # For responses
-    name = serializers.SerializerMethodField(read_only=True)
     email = serializers.EmailField(validators=[UniqueValidator(queryset=User.objects.all())])
     username = serializers.CharField(validators=[UniqueValidator(queryset=User.objects.all())])
     phone = serializers.CharField()
@@ -42,13 +40,17 @@ class UserSerializer(serializers.Serializer):
     class _Name(serializers.Serializer):
         firstname = serializers.CharField()
         lastname = serializers.CharField()
+    # Accept nested name on writes
     name = _Name(write_only=True, required=False)
 
-    def get_name(self, obj: UserDTO):
-        return {
-            'firstname': obj.firstname,
-            'lastname': obj.lastname,
+    def to_representation(self, obj: UserDTO):
+        data = super().to_representation(obj)
+        # Inject read-only name in responses
+        data['name'] = {
+            'firstname': getattr(obj, 'firstname', None),
+            'lastname': getattr(obj, 'lastname', None),
         }
+        return data
 
     def validate(self, attrs):
         # Map nested name -> firstname/lastname if provided

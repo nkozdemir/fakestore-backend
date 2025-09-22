@@ -25,12 +25,10 @@ class TestCarts(APITestCase):
 
     def test_create_and_get_cart(self):
         self._auth()
+        # New contract: user is inferred from JWT; optional products list
         payload = {
-            'id': 1,
-            'user_id': self.user.id,
-            'date': '2025-09-17T00:00:00Z',
-            'items': [
-                {'product': {'id': self.product.id, 'title': 'Widget', 'price': '10.00', 'description': 'w', 'image': '', 'rate': '0', 'count': 0, 'categories': []}, 'quantity': 2}
+            'products': [
+                {'productId': self.product.id, 'quantity': 2}
             ]
         }
         res = self.client.post(self.list_url, payload, format='json')
@@ -42,8 +40,8 @@ class TestCarts(APITestCase):
 
     def test_patch_cart_operations(self):
         self._auth()
-        # Create empty cart first
-        create = self.client.post(self.list_url, {'id': 2, 'user_id': self.user.id, 'date': '2025-09-17T00:00:00Z', 'items': []}, format='json')
+        # Create empty cart first (id auto-assigned); user inferred from JWT
+        create = self.client.post(self.list_url, {}, format='json')
         self.assertEqual(create.status_code, status.HTTP_201_CREATED)
         cid = create.data['id']
         # Add
@@ -68,9 +66,12 @@ class TestCarts(APITestCase):
 
     def test_update_and_delete_cart(self):
         self._auth()
-        create = self.client.post(self.list_url, {'id': 3, 'user_id': self.user.id, 'date': '2025-09-17T00:00:00Z', 'items': []}, format='json')
+        create = self.client.post(self.list_url, {}, format='json')
         cid = create.data['id']
         put = self.client.put(self.detail_url(cid), {'id': cid, 'user_id': self.user.id, 'date': '2025-09-18T00:00:00Z', 'items': []}, format='json')
         self.assertEqual(put.status_code, status.HTTP_200_OK)
         delete = self.client.delete(self.detail_url(cid))
         self.assertEqual(delete.status_code, status.HTTP_204_NO_CONTENT)
+        # Verify it cannot be retrieved anymore
+        get_after_delete = self.client.get(self.detail_url(cid))
+        self.assertEqual(get_after_delete.status_code, status.HTTP_404_NOT_FOUND)
