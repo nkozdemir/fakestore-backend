@@ -1,12 +1,10 @@
-from django.urls import path
+from django.urls import path, re_path
 from .views import CartListView, CartDetailView, CartByUserView
 
 urlpatterns = [
 	path('', CartListView.as_view(), name='api-carts-list'),
-	path('<int:cart_id>/', CartDetailView.as_view(), name='api-carts-detail'),
-	# Support without trailing slash for clients using /api/carts/{id}
-	path('<int:cart_id>', CartDetailView.as_view(), name='api-carts-detail-noslash'),
-	path('users/<int:user_id>/', CartByUserView.as_view(), name='api-carts-by-user'),
-	# Support without trailing slash for clients using /api/carts/users/{user_id}
-	path('users/<int:user_id>', CartByUserView.as_view(), name='api-carts-by-user-noslash'),
+	# Single pattern that accepts optional trailing slash for detail
+	re_path(r'^(?P<cart_id>\d+)/?$', CartDetailView.as_view(), name='api-carts-detail'),
+	# Single pattern that accepts optional trailing slash for by-user
+	re_path(r'^users/(?P<user_id>\d+)/?$', CartByUserView.as_view(), name='api-carts-by-user'),
 ]

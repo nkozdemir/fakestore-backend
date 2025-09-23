@@ -77,32 +77,65 @@ class CartDetailView(APIView):
         return Response(serializer.data)
     @extend_schema(
         summary="Replace cart",
+        description=(
+            "Replaces the cart. Requires authentication and only the owner can update their cart. "
+            "If unauthenticated, returns 401. If the cart does not exist or does not belong to the current user, returns 404."
+        ),
         request=CartWriteSerializer,
-        responses={200: CartReadSerializer, 400: OpenApiResponse(response=ErrorResponseSerializer), 404: OpenApiResponse(response=ErrorResponseSerializer)},
+        responses={
+            200: CartReadSerializer,
+            400: OpenApiResponse(response=ErrorResponseSerializer),
+            401: OpenApiResponse(response=ErrorResponseSerializer),
+            404: OpenApiResponse(response=ErrorResponseSerializer),
+        },
     )
     def put(self, request, cart_id: int):
+        user_id = getattr(request.user, 'id', None)
+        if not user_id:
+            return error_response('UNAUTHORIZED', 'Authentication required')
         serializer = CartWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        dto = self.service.update_cart(cart_id, serializer.validated_data)
+        dto = self.service.update_cart(cart_id, serializer.validated_data, user_id=user_id)
         if not dto:
             return error_response('NOT_FOUND', 'Cart not found', {'id': str(cart_id)})
         return Response(CartReadSerializer(dto).data)
     @extend_schema(
         summary="Patch cart items",
+        description=(
+            "Applies add/update/remove item operations. Requires authentication and only the owner can patch their cart. "
+            "If unauthenticated, returns 401. If the cart does not exist or does not belong to the current user, returns 404."
+        ),
         request=CartPatchSerializer,
-        responses={200: CartReadSerializer, 400: OpenApiResponse(response=ErrorResponseSerializer), 404: OpenApiResponse(response=ErrorResponseSerializer)},
+        responses={
+            200: CartReadSerializer,
+            400: OpenApiResponse(response=ErrorResponseSerializer),
+            401: OpenApiResponse(response=ErrorResponseSerializer),
+            404: OpenApiResponse(response=ErrorResponseSerializer),
+        },
     )
     def patch(self, request, cart_id: int):
+        user_id = getattr(request.user, 'id', None)
+        if not user_id:
+            return error_response('UNAUTHORIZED', 'Authentication required')
         # Interpret patch operations for cart items
         ops_serializer = CartPatchSerializer(data=request.data)
         ops_serializer.is_valid(raise_exception=True)
-        dto = self.service.patch_operations(cart_id, ops_serializer.validated_data)
+        dto = self.service.patch_operations(cart_id, ops_serializer.validated_data, user_id=user_id)
         if not dto:
             return error_response('NOT_FOUND', 'Cart not found', {'id': str(cart_id)})
         return Response(CartReadSerializer(dto).data)
     @extend_schema(
         summary="Delete cart",
-        responses={204: None, 404: OpenApiResponse(response=ErrorResponseSerializer)},
+        description=(
+            "Deletes a cart. Requires authentication; only the owner (derived from the JWT in the Authorization "
+            "header) can delete their cart. If unauthenticated, returns 401. If the cart does not exist or does "
+            "not belong to the current user, returns 404."
+        ),
+        responses={
+            204: None,
+            401: OpenApiResponse(response=ErrorResponseSerializer),
+            404: OpenApiResponse(response=ErrorResponseSerializer),
+        },
     )
     def delete(self, request, cart_id: int):
         user_id = getattr(request.user, 'id', None)

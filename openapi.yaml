@@ -231,12 +231,16 @@ paths:
           description: ''
     put:
       operationId: carts_update
+      description: Replaces the cart. Requires authentication and only the owner can
+        update their cart. If unauthenticated, returns 401. If the cart does not exist
+        or does not belong to the current user, returns 404.
       summary: Replace cart
       parameters:
       - in: path
         name: cart_id
         schema:
-          type: integer
+          type: string
+          pattern: ^\d+$
         required: true
       tags:
       - Carts
@@ -260,6 +264,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
         '404':
           content:
             application/json:
@@ -268,12 +278,17 @@ paths:
           description: ''
     patch:
       operationId: carts_partial_update
+      description: Applies add/update/remove item operations. Requires authentication
+        and only the owner can patch their cart. If unauthenticated, returns 401.
+        If the cart does not exist or does not belong to the current user, returns
+        404.
       summary: Patch cart items
       parameters:
       - in: path
         name: cart_id
         schema:
-          type: integer
+          type: string
+          pattern: ^\d+$
         required: true
       tags:
       - Carts
@@ -297,6 +312,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
         '404':
           content:
             application/json:
@@ -305,12 +326,17 @@ paths:
           description: ''
     delete:
       operationId: carts_destroy
+      description: Deletes a cart. Requires authentication; only the owner (derived
+        from the JWT in the Authorization header) can delete their cart. If unauthenticated,
+        returns 401. If the cart does not exist or does not belong to the current
+        user, returns 404.
       summary: Delete cart
       parameters:
       - in: path
         name: cart_id
         schema:
-          type: integer
+          type: string
+          pattern: ^\d+$
         required: true
       tags:
       - Carts
@@ -319,6 +345,12 @@ paths:
       responses:
         '204':
           description: No response body
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
         '404':
           content:
             application/json:

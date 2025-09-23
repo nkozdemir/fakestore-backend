@@ -51,8 +51,12 @@ class CartService:
                     CartProduct.objects.create(cart=cart, product=product, quantity=qty)
         return cart_to_dto(cart)
 
-    def update_cart(self, cart_id: int, data: Dict[str, Any]):
-        cart: Optional[Cart] = self.carts.get(id=cart_id)
+    def update_cart(self, cart_id: int, data: Dict[str, Any], user_id: Optional[int] = None):
+        # Enforce owner scoping if user_id provided
+        filters: Dict[str, Any] = {'id': cart_id}
+        if user_id is not None:
+            filters['user_id'] = user_id
+        cart: Optional[Cart] = self.carts.get(**filters)
         if not cart:
             return None
         payload = dict(data)
@@ -121,7 +125,7 @@ class CartService:
             deleted_count, _ = cart_qs.delete()
         return deleted_count > 0
 
-    def patch_operations(self, cart_id: int, ops: Dict[str, Any]):
+    def patch_operations(self, cart_id: int, ops: Dict[str, Any], user_id: Optional[int] = None):
         """Apply add/update/remove operations on cart line items.
         ops format:
         {
@@ -136,7 +140,10 @@ class CartService:
         update: set quantity exactly (create if missing)
         remove: delete line items
         """
-        cart: Optional[Cart] = self.carts.get(id=cart_id)
+        filters: Dict[str, Any] = {'id': cart_id}
+        if user_id is not None:
+            filters['user_id'] = user_id
+        cart: Optional[Cart] = self.carts.get(**filters)
         if not cart:
             return None
         add_ops = ops.get('add') or []

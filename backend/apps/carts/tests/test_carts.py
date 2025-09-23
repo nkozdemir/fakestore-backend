@@ -75,3 +75,21 @@ class TestCarts(APITestCase):
         # Verify it cannot be retrieved anymore
         get_after_delete = self.client.get(self.detail_url(cid))
         self.assertEqual(get_after_delete.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_delete_denied_for_non_owner(self):
+        # User1 creates a cart
+        self._auth()  # auth as self.user
+        create = self.client.post(self.list_url, {}, format='json')
+        cid = create.data['id']
+
+        # Create another user and auth as them
+        other = User.objects.create_user(
+            username='cartuser2', password='TestPass123', firstname='Other', lastname='User', email='cart2@example.com'
+        )
+        login2 = self.client.post(reverse('auth-login'), {'username': 'cartuser2', 'password': 'TestPass123'}, format='json')
+        token2 = login2.data['access']
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token2}')
+
+        # Attempt delete as non-owner should return 404 (not found/forbidden by scoping)
+        resp = self.client.delete(self.detail_url(cid))
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
