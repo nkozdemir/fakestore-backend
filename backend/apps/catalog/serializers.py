@@ -21,7 +21,8 @@ class ProductReadSerializer(serializers.Serializer):
 
 class ProductWriteSerializer(serializers.Serializer):
     # Payload for creating/updating products
-    id = serializers.IntegerField()
+    # 'id' is server-assigned (auto increment) and MUST NOT be provided by clients.
+    # Keep it out of the write serializer to avoid validation errors when omitted.
     title = serializers.CharField()
     price = serializers.DecimalField(max_digits=10, decimal_places=2)
     description = serializers.CharField()

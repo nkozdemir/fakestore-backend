@@ -52,6 +52,8 @@ class ProductService:
         return product_to_dto(p) if p else None
 
     def create_product(self, data: Dict[str, Any]):
+        # Ignore any client-supplied 'id' if present (auto-assigned by DB)
+        data.pop('id', None)
         categories = data.pop('categories', []) or []
         product: Product = self.products.create(**data)
         if categories:

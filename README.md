@@ -9,7 +9,7 @@ Layers:
 - Services (`services.py`) orchestrate business logic & return DTOs.
 - Repositories (`repositories.py`) abstract ORM CRUD + custom queries.
 - DTOs & Mappers (`dtos.py`) ensure separation between domain models and API layer.
-- Models mirror provided SQL schema (keeping given integer primary keys).
+- Models now use auto-increment primary keys (IDs are server-assigned). Clients must not send `id` fields on create.
 
 Apps:
 - `catalog`: products, categories, product-category relation (through model).
@@ -85,7 +85,7 @@ Attach a JWT access token for protected routes using the `Authorization: Bearer 
   - Auth required: `POST /api/products/<id>/rating/` (set/update user rating)
   - Auth required: `DELETE /api/products/<id>/rating/` (remove user rating)
 
-Body (create/update example):
+Body (create/update example) (omit `id`; it will be generated):
 ```json
 {
   "title": "Test Product",
