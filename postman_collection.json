@@ -1,0 +1,190 @@
+{
+  "info": {
+    "_postman_id": "8c3b5d9e-7d43-4d0c-9b52-6df7f1c2d910",
+    "name": "FakeStore API",
+    "description": "Comprehensive Postman collection for FakeStore backend including Auth, Users, Addresses (self-scoped), Products (CRUD + Ratings), Categories, Carts, and auxiliary endpoints.\n\nConventions:\n- Base URL variable: {{baseUrl}} (defaults to http://localhost:8000/api)\n- Collection-level Bearer token uses {{accessToken}} automatically after you login.\n- Variables are populated dynamically by test scripts (register/login/product create/cart create/address create).\n\nRating endpoints require authentication unless you fallback to userId param/header (discouraged).\nCart creation infers user from JWT — do NOT include userId.\nAddress endpoints are self-scoped at /users/me/addresses/.\n",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": { "major": 1, "minor": 1, "patch": 0 }
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [ { "key": "token", "value": "{{accessToken}}", "type": "string" } ]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8000/api" },
+    { "key": "accessToken", "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "userId", "value": "" },
+    { "key": "productId", "value": "" },
+    { "key": "categoryId", "value": "" },
+    { "key": "cartId", "value": "" },
+    { "key": "addressId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+            "request": {
+              "method": "POST",
+              "header": [ { "key": "Content-Type", "value": "application/json" } ],
+              "url": { "raw": "{{baseUrl}}/auth/register/", "host": [ "{{baseUrl}}" ], "path": [ "auth", "register" ] },
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"username\": \"demo_user\",\n  \"email\": \"demo@example.com\",\n  \"password\": \"ChangeMe123!\",\n  \"first_name\": \"Demo\",\n  \"last_name\": \"User\"\n}"
+              }
+            },
+            "response": [],
+            "event": [ {
+              "listen": "test",
+              "script": { "exec": [
+                "if (pm.response.code === 201) {",
+                "  var json = pm.response.json();",
+                "  if (json.id) { pm.collectionVariables.set('userId', json.id); }",
+                "}",
+                "pm.test('Register success', function() { pm.expect([200,201,400]).to.include(pm.response.code); });"
+              ], "type": "text/javascript" }
+            } ]
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/auth/login/", "host": ["{{baseUrl}}"], "path": ["auth", "login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"demo_user\",\n  \"password\": \"ChangeMe123!\"\n}" }
+          },
+          "response": [],
+          "event": [ {
+            "listen": "test",
+            "script": { "exec": [
+              "if (pm.response.code === 200) {",
+              "  var data = pm.response.json();",
+              "  if (data.access) pm.collectionVariables.set('accessToken', data.access);",
+              "  if (data.refresh) pm.collectionVariables.set('refreshToken', data.refresh);",
+              "  // Attempt to extract user id from JWT (user_id claim)\n",
+              "  try {",
+              "    var parts = data.access.split('.') ;",
+              "    if (parts.length === 3) {",
+              "      var payload = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));",
+              "      if (payload.user_id) pm.collectionVariables.set('userId', payload.user_id);",
+              "    }",
+              "  } catch(e) {}",
+              "}",
+              "pm.test('Login should succeed', function() { pm.expect(pm.response.code).to.equal(200); });"
+            ], "type": "text/javascript" }
+          } ]
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/auth/refresh/", "host": ["{{baseUrl}}"], "path": ["auth", "refresh"] },
+            "body": { "mode": "raw", "raw": "{\n  \"refresh\": \"{{refreshToken}}\"\n}" }
+          },
+          "event": [ { "listen": "test", "script": { "exec": [
+            "if (pm.response.code === 200) { var j = pm.response.json(); if (j.access) pm.collectionVariables.set('accessToken', j.access); }",
+            "pm.test('Refreshed access token', function(){ pm.expect(pm.response.code).to.equal(200); });"
+          ], "type": "text/javascript" } } ]
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/auth/me/", "host": ["{{baseUrl}}"], "path": ["auth", "me"] }
+          },
+          "event": [ { "listen": "test", "script": { "exec": [
+            "if (pm.response.code === 200) { var u = pm.response.json(); if (u.id) pm.collectionVariables.set('userId', u.id); }",
+            "pm.test('Fetched current user', function(){ pm.expect(pm.response.code).to.equal(200); });"
+          ], "type": "text/javascript" } } ]
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/auth/logout/", "host": ["{{baseUrl}}"], "path": ["auth", "logout"] },
+            "body": { "mode": "raw", "raw": "{\n  \"refresh\": \"{{refreshToken}}\"\n}" }
+          }
+        },
+        {
+          "name": "Logout All",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/auth/logout-all/", "host": ["{{baseUrl}}"], "path": ["auth", "logout-all"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        { "name": "List Users", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/users/", "host": ["{{baseUrl}}"], "path": ["users"] } } },
+        { "name": "Create User (service layer)", "request": { "method": "POST", "header": [ {"key": "Content-Type", "value": "application/json" } ], "url": { "raw": "{{baseUrl}}/users/", "host": ["{{baseUrl}}"], "path": ["users"] }, "body": { "mode": "raw", "raw": "{\n  \"email\": \"alt@example.com\",\n  \"username\": \"alt_user\",\n  \"phone\": \"1-770-736-8031 x56442\",\n  \"name\": {\n    \"firstname\": \"Alt\",\n    \"lastname\": \"User\"\n  },\n  \"password\": \"AnotherPass123!\",\n  \"address\": {\n    \"city\": \"Gwenborough\",\n    \"street\": \"Kulas Light\",\n    \"number\": 129,\n    \"zipcode\": \"92998-3874\",\n    \"geolocation\": {\n      \"lat\": \"-37.3159\",\n      \"long\": \"81.1496\"\n    }\n  }\n}" } } },
+        { "name": "Get User", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/users/{{userId}}/", "host": ["{{baseUrl}}"], "path": ["users", "{{userId}}"] } } },
+        { "name": "Replace User", "request": { "method": "PUT", "header": [ {"key": "Content-Type", "value": "application/json" } ], "url": { "raw": "{{baseUrl}}/users/{{userId}}/", "host": ["{{baseUrl}}"], "path": ["users", "{{userId}}"] }, "body": { "mode": "raw", "raw": "{\n  \"email\": \"updated@example.com\",\n  \"username\": \"demo_user\",\n  \"phone\": \"555-1234\",\n  \"name\": {\n    \"firstname\": \"Demo\",\n    \"lastname\": \"UserUpdated\"\n  }\n}" } } },
+        { "name": "Patch User", "request": { "method": "PATCH", "header": [ {"key": "Content-Type", "value": "application/json" } ], "url": { "raw": "{{baseUrl}}/users/{{userId}}/", "host": ["{{baseUrl}}"], "path": ["users", "{{userId}}"] }, "body": { "mode": "raw", "raw": "{\n  \"phone\": \"555-5678\"\n}" } } },
+        { "name": "Delete User", "request": { "method": "DELETE", "url": { "raw": "{{baseUrl}}/users/{{userId}}/", "host": ["{{baseUrl}}"], "path": ["users", "{{userId}}"] } } }
+      ]
+    },
+    {
+      "name": "Addresses (Self-Scoped)",
+      "item": [
+        { "name": "List Addresses", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/users/me/addresses/", "host": ["{{baseUrl}}"], "path": ["users", "me", "addresses"] } } },
+        { "name": "Create Address", "request": { "method": "POST", "header": [ {"key": "Content-Type", "value": "application/json" } ], "url": { "raw": "{{baseUrl}}/users/me/addresses/", "host": ["{{baseUrl}}"], "path": ["users", "me", "addresses"] }, "body": { "mode": "raw", "raw": "{\n  \"city\": \"Gwenborough\",\n  \"street\": \"Kulas Light\",\n  \"number\": 129,\n  \"zipcode\": \"92998-3874\",\n  \"geolocation\": {\n    \"lat\": \"-37.3159\",\n    \"long\": \"81.1496\"\n  }\n}" } }, "event": [ { "listen": "test", "script": { "exec": [
+          "if (pm.response.code === 201) { var a = pm.response.json(); if (a.id) pm.collectionVariables.set('addressId', a.id); }"
+        ], "type": "text/javascript" } } ] },
+        { "name": "Get Address", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/users/me/addresses/{{addressId}}/", "host": ["{{baseUrl}}"], "path": ["users", "me", "addresses", "{{addressId}}"] } } },
+        { "name": "Replace Address", "request": { "method": "PUT", "header": [ {"key": "Content-Type", "value": "application/json" } ], "url": { "raw": "{{baseUrl}}/users/me/addresses/{{addressId}}/", "host": ["{{baseUrl}}"], "path": ["users", "me", "addresses", "{{addressId}}"] }, "body": { "mode": "raw", "raw": "{\n  \"city\": \"Metro City\",\n  \"street\": \"Main Ave\",\n  \"number\": 42,\n  \"zipcode\": \"10001\",\n  \"geolocation\": {\n    \"lat\": \"10.0000\",\n    \"long\": \"20.0000\"\n  }\n}" } } },
+        { "name": "Patch Address", "request": { "method": "PATCH", "header": [ {"key": "Content-Type", "value": "application/json" } ], "url": { "raw": "{{baseUrl}}/users/me/addresses/{{addressId}}/", "host": ["{{baseUrl}}"], "path": ["users", "me", "addresses", "{{addressId}}"] }, "body": { "mode": "raw", "raw": "{\n  \"zipcode\": \"10002\"\n}" } } },
+        { "name": "Delete Address", "request": { "method": "DELETE", "url": { "raw": "{{baseUrl}}/users/me/addresses/{{addressId}}/", "host": ["{{baseUrl}}"], "path": ["users", "me", "addresses", "{{addressId}}"] } } }
+      ]
+    },
+    {
+      "name": "Products",
+      "item": [
+        { "name": "List Products", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/products/", "host": ["{{baseUrl}}"], "path": ["products"] } } },
+  { "name": "Create Product", "request": { "method": "POST", "header": [ {"key": "Content-Type", "value": "application/json" } ], "url": { "raw": "{{baseUrl}}/products/", "host": ["{{baseUrl}}"], "path": ["products"] }, "body": { "mode": "raw", "raw": "{\n  \"title\": \"Test Product\",\n  \"price\": 19.99,\n  \"description\": \"A product created via Postman collection.\",\n  \"image\": \"https://example.com/image.png\",\n  \"categories\": []\n}" } }, "event": [ { "listen": "test", "script": { "exec": [
+          "if (pm.response.code === 201) { var p = pm.response.json(); if (p.id) pm.collectionVariables.set('productId', p.id); }"
+        ], "type": "text/javascript" } } ] },
+        { "name": "Get Product", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/products/{{productId}}/", "host": ["{{baseUrl}}"], "path": ["products", "{{productId}}"] } } },
+  { "name": "Replace Product", "request": { "method": "PUT", "header": [ {"key": "Content-Type", "value": "application/json" } ], "url": { "raw": "{{baseUrl}}/products/{{productId}}/", "host": ["{{baseUrl}}"], "path": ["products", "{{productId}}"] }, "body": { "mode": "raw", "raw": "{\n  \"title\": \"Updated Product\",\n  \"price\": 29.99,\n  \"description\": \"Updated description.\",\n  \"image\": \"https://example.com/updated.png\",\n  \"categories\": []\n}" } } },
+        { "name": "Patch Product", "request": { "method": "PATCH", "header": [ {"key": "Content-Type", "value": "application/json" } ], "url": { "raw": "{{baseUrl}}/products/{{productId}}/", "host": ["{{baseUrl}}"], "path": ["products", "{{productId}}"] }, "body": { "mode": "raw", "raw": "{\n  \"price\": 24.99\n}" } } },
+        { "name": "Delete Product", "request": { "method": "DELETE", "url": { "raw": "{{baseUrl}}/products/{{productId}}/", "host": ["{{baseUrl}}"], "path": ["products", "{{productId}}"] } } },
+        { "name": "Rating - Get Summary", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/products/{{productId}}/rating/", "host": ["{{baseUrl}}"], "path": ["products", "{{productId}}", "rating"] } } },
+        { "name": "Rating - Set Value", "request": { "method": "POST", "header": [ {"key": "Content-Type", "value": "application/json" } ], "url": { "raw": "{{baseUrl}}/products/{{productId}}/rating/", "host": ["{{baseUrl}}"], "path": ["products", "{{productId}}", "rating"] }, "body": { "mode": "raw", "raw": "{\n  \"value\": 4\n}" } } },
+        { "name": "Rating - Delete", "request": { "method": "DELETE", "url": { "raw": "{{baseUrl}}/products/{{productId}}/rating/", "host": ["{{baseUrl}}"], "path": ["products", "{{productId}}", "rating"] } } },
+        { "name": "List By Categories", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/products/by-categories/?categoryIds=1,2", "host": ["{{baseUrl}}"], "path": ["products", "by-categories"], "query": [ {"key": "categoryIds", "value": "1,2"} ] } } }
+      ]
+    },
+    {
+      "name": "Categories",
+      "item": [
+        { "name": "List Categories", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/categories/", "host": ["{{baseUrl}}"], "path": ["categories"] } } },
+  { "name": "Create Category", "request": { "method": "POST", "header": [ {"key": "Content-Type", "value": "application/json" } ], "url": { "raw": "{{baseUrl}}/categories/", "host": ["{{baseUrl}}"], "path": ["categories"] }, "body": { "mode": "raw", "raw": "{\n  \"name\": \"Sample Category\"\n}" } }, "event": [ { "listen": "test", "script": { "exec": [
+          "if (pm.response.code === 201) { var c = pm.response.json(); if (c.id) pm.collectionVariables.set('categoryId', c.id); }"
+        ], "type": "text/javascript" } } ] },
+        { "name": "Get Category", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/categories/{{categoryId}}/", "host": ["{{baseUrl}}"], "path": ["categories", "{{categoryId}}"] } } },
+  { "name": "Replace Category", "request": { "method": "PUT", "header": [ {"key": "Content-Type", "value": "application/json" } ], "url": { "raw": "{{baseUrl}}/categories/{{categoryId}}/", "host": ["{{baseUrl}}"], "path": ["categories", "{{categoryId}}"] }, "body": { "mode": "raw", "raw": "{\n  \"name\": \"Updated Category\"\n}" } } },
+        { "name": "Patch Category", "request": { "method": "PATCH", "header": [ {"key": "Content-Type", "value": "application/json" } ], "url": { "raw": "{{baseUrl}}/categories/{{categoryId}}/", "host": ["{{baseUrl}}"], "path": ["categories", "{{categoryId}}"] }, "body": { "mode": "raw", "raw": "{\n  \"name\": \"Partial Category\"\n}" } } },
+        { "name": "Delete Category", "request": { "method": "DELETE", "url": { "raw": "{{baseUrl}}/categories/{{categoryId}}/", "host": ["{{baseUrl}}"], "path": ["categories", "{{categoryId}}"] } } }
+      ]
+    },
+    {
+      "name": "Carts",
+      "item": [
+        { "name": "List Carts", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/carts/", "host": ["{{baseUrl}}"], "path": ["carts"] } } },
+        { "name": "Create Cart", "request": { "method": "POST", "header": [ {"key": "Content-Type", "value": "application/json" } ], "url": { "raw": "{{baseUrl}}/carts/", "host": ["{{baseUrl}}"], "path": ["carts"] }, "body": { "mode": "raw", "raw": "{\n  \"date\": \"2024-01-01\",\n  \"products\": [ { \"productId\": {{productId}}, \"quantity\": 2 } ]\n}" } }, "event": [ { "listen": "test", "script": { "exec": [
+          "if (pm.response.code === 201) { var cart = pm.response.json(); if (cart.id) pm.collectionVariables.set('cartId', cart.id); }"
+        ], "type": "text/javascript" } } ] },
+        { "name": "Get Cart", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}"] } } },
+  { "name": "Replace Cart", "request": { "method": "PUT", "header": [ {"key": "Content-Type", "value": "application/json" } ], "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}"] }, "body": { "mode": "raw", "raw": "{\n  \"date\": \"2024-01-02\",\n  \"items\": []\n}" } } },
+        { "name": "Patch Cart Items", "request": { "method": "PATCH", "header": [ {"key": "Content-Type", "value": "application/json" } ], "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}"] }, "body": { "mode": "raw", "raw": "{\n  \"add\": [ { \"productId\": {{productId}}, \"quantity\": 1 } ],\n  \"update\": [],\n  \"remove\": []\n}" } } },
+        { "name": "Delete Cart", "request": { "method": "DELETE", "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}"] } } },
+        { "name": "List Carts By User", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/carts/users/{{userId}}/", "host": ["{{baseUrl}}"], "path": ["carts", "users", "{{userId}}"] } } }
+      ]
+    }
+  ]
+}
