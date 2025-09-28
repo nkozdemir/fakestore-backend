@@ -1,0 +1,42 @@
+services:
+  db:
+    image: postgres:16
+    env_file:
+      - ../.env.prod
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --save 60 1 --loglevel warning
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  web:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.prod
+    env_file:
+      - ../.env.prod
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    # DJANGO_SECRET_KEY now supplied exclusively via env_file (.env.prod). Do NOT override with blank host var.
+    command: >
+      sh -c "exec gunicorn fakestore.wsgi:application --chdir backend --bind 0.0.0.0:8000 \
+             --workers 2 --threads 2 --timeout 30"
+
+volumes:
+  pgdata:

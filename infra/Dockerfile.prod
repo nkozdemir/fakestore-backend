@@ -1,0 +1,41 @@
+# --- Builder stage ---
+FROM python:3.12-slim AS builder
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+WORKDIR /build
+
+# System deps
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential libpq-dev && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --prefix=/install --no-cache-dir -r requirements.txt
+
+# --- Final stage ---
+FROM python:3.12-slim
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
+    APP_HOME=/app \
+    DJANGO_SETTINGS_MODULE=fakestore.settings
+
+# Minimal runtime packages (optional if needed)
+RUN apt-get update && apt-get install -y --no-install-recommends libpq-dev && rm -rf /var/lib/apt/lists/*
+
+WORKDIR $APP_HOME
+
+# Copy installed packages from builder
+COPY --from=builder /install /usr/local
+
+# Copy project
+COPY backend ./backend
+# Copy only env example (real secrets passed as env vars at runtime)
+COPY .env.example ./.env.example
+
+# Create non-root user
+RUN useradd -m appuser && chown -R appuser:appuser $APP_HOME
+USER appuser
+
+# Collect static (if you later add STATIC_ROOT)
+# RUN python backend/manage.py collectstatic --noinput
+
+EXPOSE 8000
+
+# Gunicorn config (you can bake a gunicorn.conf.py into repo and just reference it)
+CMD [\"gunicorn\", \"fakestore.wsgi:application\", \"--chdir\", \"backend\", \"--bind\", \"0.0.0.0:8000\", \"--workers\", \"3\", \"--threads\", \"2\", \"--timeout\", \"30\"]

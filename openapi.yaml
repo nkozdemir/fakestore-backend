@@ -1,4 +1,4 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
   title: FakeStore API
   version: 1.0.0
@@ -742,7 +742,11 @@ paths:
       - {}
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RatingSummary'
+          description: Rating summary for the product (includes userRating if authenticated)
         '404':
           content:
             application/json:
@@ -770,7 +774,11 @@ paths:
       - jwtAuth: []
       responses:
         '201':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RatingSummary'
+          description: Updated rating summary
         '400':
           content:
             application/json:
@@ -803,8 +811,8 @@ paths:
       security:
       - jwtAuth: []
       responses:
-        '200':
-          description: No response body
+        '204':
+          description: Rating removed (no content)
         '400':
           content:
             application/json:
@@ -1115,6 +1123,38 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+  /health/live:
+    get:
+      operationId: health_live_retrieve
+      summary: Liveness probe
+      tags:
+      - Health
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthLive'
+          description: Process is alive
+  /health/ready:
+    get:
+      operationId: health_ready_retrieve
+      summary: Readiness probe
+      tags:
+      - Health
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthReady'
+          description: All critical dependencies are OK
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthReady'
+          description: One or more dependencies failing (degraded)
     put:
       operationId: users_me_addresses_update
       summary: Replace address for current user
@@ -1560,8 +1600,6 @@ components:
     PatchedProductWriteRequest:
       type: object
       properties:
-        id:
-          type: integer
         title:
           type: string
           minLength: 1
@@ -1637,20 +1675,17 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Category'
-      required:
-      - categories
-      - count
-      - description
-      - id
-      - image
-      - price
-      - rate
-      - title
+    required:
+    - categories
+    - count
+    - description
+    - image
+    - price
+    - rate
+    - title
     ProductWriteRequest:
       type: object
       properties:
-        id:
-          type: integer
         title:
           type: string
           minLength: 1
@@ -1674,7 +1709,6 @@ components:
             type: integer
       required:
       - description
-      - id
       - image
       - price
       - title
@@ -1844,6 +1878,64 @@ components:
       required:
       - firstname
       - lastname
+    RatingSummary:
+      type: object
+      properties:
+        productId:
+          type: integer
+        average:
+          type: number
+          format: double
+          nullable: true
+        count:
+          type: integer
+        userRating:
+          type: integer
+          nullable: true
+      required:
+      - productId
+      - count
+    HealthLive:
+      type: object
+      properties:
+        status:
+          type: string
+          example: alive
+      required:
+      - status
+    HealthReady:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        checks:
+          type: object
+          properties:
+            database:
+              type: object
+              properties:
+                status:
+                  type: string
+                latency_ms:
+                  type: number
+                  format: double
+              required:
+              - status
+            redis:
+              type: object
+              properties:
+                status:
+                  type: string
+                detail:
+                  type: string
+                error:
+                  type: string
+              required:
+              - status
+      required:
+      - status
+      - checks
   securitySchemes:
     jwtAuth:
       type: http

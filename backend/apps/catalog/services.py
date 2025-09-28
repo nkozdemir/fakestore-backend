@@ -135,16 +135,14 @@ class ProductService:
         return self.get_rating_summary(product_id, user_id)
 
     def _recalculate_product_rating(self, product: Product):
-        qs = product.ratings.all()
-        count = qs.count()
-        if count == 0:
+        from django.db.models import Avg, Count
+        agg = product.ratings.aggregate(avg=Avg('value'), count=Count('id'))
+        count = agg['count'] or 0
+        if not count:
             product.rate = 0
             product.count = 0
         else:
-            total = sum(r.value for r in qs)
-            avg = total / count
-            # one decimal place rounding
-            product.rate = round(avg + 1e-8, 1)
+            product.rate = round(float(agg['avg']) + 1e-8, 1)
             product.count = count
         product.save(update_fields=['rate', 'count'])
 

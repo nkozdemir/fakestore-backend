@@ -1,0 +1,84 @@
+# Makefile for FakeStore backend (production oriented)
+# Usage examples:
+#   make prod-build            # Build prod images
+#   make prod-up               # Start stack in background
+#   make prod-migrate          # Run Django migrations in prod stack
+#   make prod-seed             # Seed initial data (idempotent)
+#   make prod-bootstrap        # Build, up, migrate, seed
+#   make prod-logs             # Tail web logs
+#   make prod-down             # Stop stack
+#   make prod-restart          # Restart web service
+
+SHELL := /bin/bash
+
+COMPOSE_PROD = docker compose -f infra/docker-compose.prod.yml
+
+# Allow passing e.g. SECRET_FILE=.env.prod or explicit key
+ENV_FILE ?= .env.prod
+
+.PHONY: help
+help:
+	@echo "Available targets:" && \
+	egrep -h '^[a-zA-Z0-9_.-]+:.*?##' Makefile | awk 'BEGIN {FS=":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}' | sort
+
+.PHONY: prod-build
+prod-build: ## Build production images
+	$(COMPOSE_PROD) build
+
+.PHONY: prod-up
+prod-up: ## Start production stack (detached)
+	$(COMPOSE_PROD) up -d
+
+.PHONY: prod-migrate
+prod-migrate: ## Run Django migrations inside prod web container
+	$(COMPOSE_PROD) exec web python backend/manage.py migrate
+
+.PHONY: prod-seed
+prod-seed: ## Seed initial data (management command 'seed_fakestore')
+	@if $(COMPOSE_PROD) exec web python backend/manage.py help seed_fakestore >/dev/null 2>&1; then \
+		echo "Seeding initial data..."; \
+		$(COMPOSE_PROD) exec web python backend/manage.py seed_fakestore; \
+	else \
+		echo "[WARN] seed_fakestore command not found. Skipping."; \
+	fi
+
+.PHONY: prod-bootstrap
+prod-bootstrap: prod-build prod-up prod-migrate prod-seed ## Build, start, migrate, seed
+	@echo "Production bootstrap complete."
+
+.PHONY: prod-logs
+prod-logs: ## Tail web logs
+	$(COMPOSE_PROD) logs -f web
+
+.PHONY: prod-down
+prod-down: ## Stop production stack (preserve volumes)
+	$(COMPOSE_PROD) down
+
+.PHONY: prod-destroy
+prod-destroy: ## Stop stack and remove volumes (DANGEROUS)
+	$(COMPOSE_PROD) down -v
+
+.PHONY: prod-restart
+prod-restart: ## Restart web service
+	$(COMPOSE_PROD) restart web
+
+.PHONY: prod-shell
+prod-shell: ## Open shell in web container
+	$(COMPOSE_PROD) exec web /bin/sh
+
+.PHONY: prod-collectstatic
+prod-collectstatic: ## Run collectstatic (if STATIC_ROOT configured)
+	$(COMPOSE_PROD) exec web python backend/manage.py collectstatic --noinput
+
+.PHONY: check-secret
+check-secret: ## Print secret key length inside running web container
+	$(COMPOSE_PROD) exec web python -c "import os,django;os.environ.setdefault('DJANGO_SETTINGS_MODULE','fakestore.settings');django.setup();from django.conf import settings;print('SECRET_KEY length:',len(settings.SECRET_KEY));print('Starts with dev-secret-key?',settings.SECRET_KEY.startswith('dev-secret-key'))"
+
+.PHONY: prod-migrate-once
+prod-migrate-once: ## Run migrations (one-off container) before starting web (alternative workflow)
+	$(COMPOSE_PROD) run --rm web python backend/manage.py migrate
+
+# Convenience alias
+.PHONY: logs
+logs: prod-logs ## Alias for prod-logs
+

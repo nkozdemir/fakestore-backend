@@ -22,6 +22,12 @@ class Product(models.Model):
     def __str__(self):
         return self.title
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['title'], name='product_title_idx'),
+            models.Index(fields=['rate'], name='product_rate_idx'),
+        ]
+
 class Rating(models.Model):
     product = models.ForeignKey('Product', on_delete=models.CASCADE, related_name='ratings')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='product_ratings')
@@ -32,6 +38,9 @@ class Rating(models.Model):
     class Meta:
         unique_together = ('product', 'user')
         db_table = 'product_ratings'
+        indexes = [
+            models.Index(fields=['product'], name='rating_product_idx'),
+        ]
 
     def __str__(self):
         return f"Rating {self.value} for product {self.product_id} by user {self.user_id}"
@@ -43,3 +52,6 @@ class ProductCategory(models.Model):
     class Meta:
         unique_together = ('product', 'category')
         db_table = 'product_categories'
+        indexes = [
+            models.Index(fields=['product', 'category'], name='prod_cat_combo_idx'),
+        ]

@@ -2,6 +2,7 @@ import os
 import sys
 from pathlib import Path
 from dotenv import load_dotenv
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 # Try root project .env (one directory up from BASE_DIR) first, then local
@@ -12,9 +13,34 @@ if root_env.exists():
 elif local_env.exists():
     load_dotenv(local_env)
 
-SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'dev-secret-key')
+# ---------------------------------------------------------------------------
+# SECRET KEY HANDLING
+# Prefer DJANGO_SECRET_KEY, fall back to SECRET_KEY for broader compatibility.
+# In production (DEBUG=False) we require a non-default, non-empty key.
+# ---------------------------------------------------------------------------
+_candidate_key = (
+    os.getenv('DJANGO_SECRET_KEY')
+    or os.getenv('SECRET_KEY')
+    or ''
+)
+
+# If key is blank, fall back to a deterministic dev key (only in DEBUG) so the
+# server can still start locally. We'll validate right after DEBUG is computed.
+SECRET_KEY = _candidate_key if _candidate_key else 'dev-secret-key'
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',')
+
+# Validate SECRET_KEY (after DEBUG so we know environment context)
+if (not SECRET_KEY or SECRET_KEY == 'dev-secret-key') and not DEBUG:
+    raise ImproperlyConfigured(
+        'SECRET_KEY is missing or using insecure default. Set DJANGO_SECRET_KEY or SECRET_KEY env var.'
+    )
+if not SECRET_KEY:
+    # Even in DEBUG we do not allow an empty string; generation is trivial.
+    raise ImproperlyConfigured(
+        'SECRET_KEY must not be empty. Generate one with: '\
+        "python -c 'from django.core.management.utils import get_random_secret_key as g; print(g())'"  # noqa: E501
+    )
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -98,7 +124,13 @@ DATABASES = {
 }
 
 # Caching (Redis by default)
-REDIS_URL = os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/1')
+"""Caching configuration.
+Default REDIS_URL now points to the docker compose service name `redis` so
+production/docker environments get a fast cache by default. In local non-docker
+dev you can override with 127.0.0.1. We also ignore cache exceptions so cache
+outages do not block request handling (trade-off: potential stampede or slower
+responses until cache returns)."""
+REDIS_URL = os.getenv('REDIS_URL', 'redis://redis:6379/1')
 CACHE_TTL = int(os.getenv('CACHE_TTL', '300'))  # seconds
 
 CACHES = {
@@ -107,6 +139,8 @@ CACHES = {
         'LOCATION': REDIS_URL,
         'OPTIONS': {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            # Fail open – if Redis is down, treat cache operations as no-ops.
+            'IGNORE_EXCEPTIONS': True,
         },
         'KEY_PREFIX': os.getenv('CACHE_KEY_PREFIX', 'fakestore'),
         'TIMEOUT': CACHE_TTL,
