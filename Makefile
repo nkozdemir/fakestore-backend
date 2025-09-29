@@ -109,3 +109,10 @@ schema-export-local: ## Run schema export using local python (no docker) (ensure
 prod-build-with-schema: prod-build prod-up schema-export ## Build, start, export schema
 	@echo "Build + schema export complete."
 
+# ---------------------------------------------------------------------------
+# Testing (pytest)
+# ---------------------------------------------------------------------------
+.PHONY: pytest
+pytest: ## Run test suite with pytest
+	pytest -q
+

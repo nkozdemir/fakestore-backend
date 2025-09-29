@@ -28,7 +28,10 @@ def _db_check(alias='default'):
         conn.cursor().execute('SELECT 1')
         return {'status': 'ok', 'latency_ms': round((time.time() - started) * 1000, 2)}
     except OperationalError as e:
+        # Expected operational DB issues (connection refused, etc.)
         return {'status': 'fail', 'error': str(e)}
+    except Exception as e:  # broaden for unexpected exceptions (mocked failures, driver bugs)
+        return {'status': 'fail', 'error': str(e), 'exception': e.__class__.__name__}
 
 
 def live_health(request):

@@ -225,24 +225,38 @@ Test file locations:
 - `backend/apps/carts/tests/test_carts.py`
 - `backend/apps/users/tests/test_users.py`
 
-Run tests (reliable options):
-- Using dotted test modules (most robust; avoids ambiguous `tests` import):
+### Pytest (Preferred)
+
+Pytest is configured via `pytest.ini` and a root `conftest.py`.
+
+Run entire suite:
+```bash
+pytest
+```
+
+Or with coverage (if desired):
+```bash
+pytest --cov=backend/apps --cov-report=term-missing
+```
+
+Makefile target:
+```bash
+make pytest
+```
+
+Useful flags:
+```bash
+pytest -k "rating and not delete" -vv
+pytest --maxfail=1 -q
+```
+
+### Django test runner (legacy / fallback)
+You can still invoke the built-in runner:
 ```bash
 python backend/manage.py test apps.auth.tests apps.catalog.tests apps.carts.tests apps.users.tests -v 2
 ```
-- Using app labels (note the custom auth app label to avoid clashing with `django.contrib.auth`):
-```bash
-python backend/manage.py test fakestore_auth catalog carts users -v 2
-```
-- From inside the backend folder:
-```bash
-cd backend
-python manage.py test fakestore_auth catalog carts users -v 2
-```
 
-Notes on bare discovery and ImportError:
-- Running `python backend/manage.py test -v 2` may sometimes raise `ImportError: 'tests' module incorrectly imported...` when the environment has a top-level `tests` module installed. This is a unittest discovery quirk when a package named `tests` is imported without its full package path.
-- Use one of the commands above (dotted modules or explicit app labels) to ensure Python imports `apps.<app>.tests` and not a global `tests` package.
+Note: Prefer pytest for faster iteration, richer assertions, and better failure introspection.
 
 Notes:
 - DRF test client is used with `format='json'` for all JSON requests.
