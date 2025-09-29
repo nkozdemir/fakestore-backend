@@ -27,8 +27,8 @@ class ProductListView(APIView):
         data = self.service.list_products(category=category)
         paginator = ProductListPagination()
         page = paginator.paginate_queryset(data, request, view=self)
-        serializer = ProductReadSerializer(data=page, many=True)
-        serializer.is_valid(raise_exception=False)
+        # Serializer expects DTO instances; pass as instance, not data
+        serializer = ProductReadSerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
 
     @extend_schema(
@@ -57,8 +57,7 @@ class ProductDetailView(APIView):
         dto = self.service.get_product(product_id)
         if not dto:
             return error_response('NOT_FOUND', 'Product not found', {'id': str(product_id)})
-        serializer = ProductReadSerializer(dto)
-        return Response(serializer.data)
+        return Response(ProductReadSerializer(dto).data)
 
     @extend_schema(
         summary="Replace product",
@@ -104,9 +103,7 @@ class CategoryListView(APIView):
     @extend_schema(summary="List categories", responses={200: CategorySerializer(many=True)})
     def get(self, request):
         data = self.service.list_categories()
-        serializer = CategorySerializer(data=data, many=True)
-        serializer.is_valid(raise_exception=False)
-        return Response(serializer.data)
+        return Response(CategorySerializer(data, many=True).data)
     @extend_schema(summary="Create category", request=CategorySerializer, responses={201: CategorySerializer, 400: OpenApiResponse(response=ErrorResponseSerializer)})
     def post(self, request):
         serializer = CategorySerializer(data=request.data)
@@ -124,8 +121,7 @@ class CategoryDetailView(APIView):
         dto = self.service.get_category(category_id)
         if not dto:
             return error_response('NOT_FOUND', 'Category not found', {'id': str(category_id)})
-        serializer = CategorySerializer(dto)
-        return Response(serializer.data)
+        return Response(CategorySerializer(dto).data)
 
     @extend_schema(summary="Replace category", request=CategorySerializer, responses={200: CategorySerializer, 400: OpenApiResponse(response=ErrorResponseSerializer), 404: OpenApiResponse(response=ErrorResponseSerializer)})
     def put(self, request, category_id: int):
@@ -239,6 +235,4 @@ class ProductByCategoriesView(APIView):
         if not ids:
             return Response([])
         data = self.service.list_products_by_category_ids(ids)
-        serializer = ProductReadSerializer(data=data, many=True)
-        serializer.is_valid(raise_exception=False)
-        return Response(serializer.data)
+        return Response(ProductReadSerializer(data, many=True).data)

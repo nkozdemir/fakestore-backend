@@ -23,6 +23,35 @@ class ProductRepository(GenericRepository[Product]):
             .prefetch_related('categories')
         )
 
+    # --- Helper methods for service orchestration ---
+    def set_categories(self, product: Product, category_ids):
+        from .models import Category  # local import to avoid circulars in migrations
+        qs = Category.objects.filter(id__in=category_ids) if category_ids else []
+        product.categories.set(qs)
+
+    def update_scalar(self, product: Product, **fields):
+        dirty = False
+        for k, v in fields.items():
+            if v is not None:
+                setattr(product, k, v)
+                dirty = True
+        if dirty:
+            product.save()
+        return product
+
+    def recalculate_rating(self, product: Product):
+        from django.db.models import Avg, Count
+        agg = product.ratings.aggregate(avg=Avg('value'), count=Count('id'))
+        count = agg['count'] or 0
+        if not count:
+            product.rate = 0
+            product.count = 0
+        else:
+            product.rate = round(float(agg['avg']) + 1e-8, 1)
+            product.count = count
+        product.save(update_fields=['rate', 'count'])
+        return product
+
 class RatingRepository(GenericRepository[Rating]):
     def __init__(self):
         super().__init__(Rating)

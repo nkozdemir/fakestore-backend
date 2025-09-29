@@ -43,7 +43,7 @@ prod-seed: ## Seed initial data (management command 'seed_fakestore')
 	fi
 
 .PHONY: prod-bootstrap
-prod-bootstrap: prod-build prod-up prod-migrate prod-seed ## Build, start, migrate, seed
+prod-bootstrap: prod-build prod-up prod-migrate prod-seed schema-export ## Build, start, migrate, seed, export schema
 	@echo "Production bootstrap complete."
 
 .PHONY: prod-logs
@@ -81,4 +81,31 @@ prod-migrate-once: ## Run migrations (one-off container) before starting web (al
 # Convenience alias
 .PHONY: logs
 logs: prod-logs ## Alias for prod-logs
+
+# ---------------------------------------------------------------------------
+# OpenAPI schema export (static artifacts)
+# ---------------------------------------------------------------------------
+SCHEMA_DIR=backend/static/schema
+SCHEMA_JSON=$(SCHEMA_DIR)/openapi.json
+SCHEMA_YAML=$(SCHEMA_DIR)/openapi.yaml
+
+.PHONY: schema-export
+schema-export: ## Export OpenAPI schema to JSON & YAML (requires running web container)
+	@echo "Exporting OpenAPI schema (JSON & YAML) to $(SCHEMA_DIR)";
+	$(COMPOSE_PROD) exec web mkdir -p $(SCHEMA_DIR)
+	$(COMPOSE_PROD) exec web python backend/manage.py spectacular --file /tmp/schema.json --format openapi-json
+	$(COMPOSE_PROD) exec web python -c "import json,sys; p='/tmp/schema.json'; raw=open(p).read().strip() or sys.exit('Empty schema'); obj=json.loads(raw); open(p,'w').write(json.dumps(obj, indent=2))"
+	$(COMPOSE_PROD) exec web python -c "import json,yaml,os; obj=json.load(open('/tmp/schema.json')); open('/tmp/schema.yaml','w').write(yaml.safe_dump(obj, sort_keys=False))"
+	$(COMPOSE_PROD) exec web sh -c "cp /tmp/schema.json $(SCHEMA_JSON) && cp /tmp/schema.yaml $(SCHEMA_YAML)"
+	@echo "Schema written to $(SCHEMA_JSON) and $(SCHEMA_YAML)"
+
+.PHONY: schema-export-local
+schema-export-local: ## Run schema export using local python (no docker) (ensure venv active)
+	python backend/manage.py spectacular --file $(SCHEMA_JSON) --format openapi-json
+	python -c "import json,yaml; obj=json.load(open('$(SCHEMA_JSON)')); open('$(SCHEMA_YAML)','w').write(yaml.safe_dump(obj, sort_keys=False)); print('Wrote YAML schema to $(SCHEMA_YAML)')"
+	@echo "Schema written to $(SCHEMA_JSON) and $(SCHEMA_YAML)"
+
+.PHONY: prod-build-with-schema
+prod-build-with-schema: prod-build prod-up schema-export ## Build, start, export schema
+	@echo "Build + schema export complete."
 

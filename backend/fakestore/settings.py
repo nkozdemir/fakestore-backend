@@ -172,6 +172,10 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = 'static/'
+STATIC_ROOT = os.getenv('STATIC_ROOT', str(BASE_DIR / 'staticfiles'))
+STATICFILES_DIRS = [BASE_DIR / 'static'] if (BASE_DIR / 'static').exists() else []
+OPENAPI_STATIC_JSON = 'schema/openapi.json'
+OPENAPI_STATIC_YAML = 'schema/openapi.yaml'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Use custom user model
