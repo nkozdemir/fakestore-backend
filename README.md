@@ -21,37 +21,14 @@ Apps:
 backend/
   fakestore/ (settings, urls)
   apps/
-    catalog/
-    users/
-    carts/
+    api/ (shared API utilities, error handling)
+    auth/ (authentication, JWT handling)
+    catalog/ (products, categories)
+    users/ (user profiles, addresses)
+    carts/ (shopping cart management)
     common/ (shared repository base)
- devops/
-  Dockerfile
-  docker-compose.yml
 requirements.txt
 .env.example
-```
-
-## Running with Docker
-
-Copy env file:
-```bash
-cp .env.example .env
-```
-
-Start services:
-```bash
-cd devops
-docker compose up --build
-```
-
-Run migrations & seed (single command):
-```bash
-docker compose exec web python manage.py makemigrations
-docker compose exec web python manage.py migrate
-docker compose exec web python manage.py seed_fakestore
-# Re-seed from scratch (flush existing data):
-docker compose exec web python manage.py seed_fakestore --flush
 ```
 
 ## API Endpoints
@@ -189,17 +166,6 @@ Examples:
 - Add pagination by integrating DRF pagination in settings and adjusting views.
 - Replace manual DTO serializers with DRF ModelSerializers if you later loosen layering constraints.
 
-## Development outside Docker
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-# Ensure local Postgres is running & env vars point to it
-python backend/manage.py migrate
-python backend/manage.py runserver
-```
-
 ## Testing
 
 Unit tests are provided for all main API areas and run against SQLite automatically (tests switch DB in settings when `test` is in `sys.argv`). Tests now live under per-app `tests/` packages for consistent discovery.
@@ -239,11 +205,6 @@ Or with coverage (if desired):
 pytest --cov=backend/apps --cov-report=term-missing
 ```
 
-Makefile target:
-```bash
-make pytest
-```
-
 Useful flags:
 ```bash
 pytest -k "rating and not delete" -vv
@@ -267,182 +228,4 @@ Notes:
 - Repositories intentionally thin; add caching, soft delete, or query specifications as complexity grows.
 - Error codes are centralized in `apps/api/utils.py` (`error_response`). Add new codes there.
 - Future enhancements: pagination, authentication, rate limiting, category/product validation details, global exception handler for SERVER_ERROR wrapping.
-
-## Production Deployment
-
-This repository includes a production compose file and a multi-stage production Dockerfile. Core principles:
-
-| Aspect | Approach |
-|--------|----------|
-| Image Build | Multi-stage (`infra/Dockerfile.prod`) installing dependencies once |
-| App Server | Gunicorn (WSGI) with configurable workers/threads |
-| Secrets | Inject via environment variables / `env_file` (not baked into image) |
-| Migrations | Run automatically before Gunicorn starts |
-| Health Probes | `/health/live` (liveness) & `/health/ready` (readiness) |
-| Caching | Redis (optional – readiness reports skipped if not set) |
-
-### 1. Prepare Environment File
-
-Create `.env.prod` (referenced by `infra/docker-compose.prod.yml` via `env_file`):
-
-```bash
-cat > .env.prod <<'EOF'
-DJANGO_SECRET_KEY=$(python -c 'from django.core.management.utils import get_random_secret_key as g; print(g())')
-POSTGRES_PASSWORD=change-me-strong
-ALLOWED_HOSTS=*
-EOF
-```
-
-Keep this file out of version control (add to `.gitignore` if not already).
-
-### 2. Build & Start
-
-Using the Makefile (recommended):
-
-```bash
-make prod-build
-make prod-up       # or: make prod-bootstrap (build+up+migrate+seed if seed command exists)
-```
-
-Direct compose commands:
-```bash
-docker compose -f infra/docker-compose.prod.yml build
-docker compose -f infra/docker-compose.prod.yml up -d
-```
-
-### 3. Verify
-
-```bash
-curl -s http://localhost:8000/health/live | jq .
-curl -s -i http://localhost:8000/health/ready | jq .
-```
-Expect `status: ok` for readiness when DB (and Redis if configured) are reachable.
-
-### 4. Logs & Management
-
-```bash
-make prod-logs
-make prod-migrate
-make prod-restart
-make prod-shell
-make check-secret    # prints SECRET_KEY length and whether dev key used
-```
-
-### 5. Stopping / Destroying
-
-```bash
-make prod-down      # keeps volumes
-make prod-destroy   # removes volumes (data loss!)
-```
-
-### 6. Gunicorn Tuning (Optional)
-
-Default: 3 workers, 2 threads, 30s timeout. Adjust based on CPU cores (rule of thumb: workers = cores * 2 + 1 for CPU-bound; fewer if IO-bound + threads enabled). Example override (edit compose `command` or future entrypoint):
-
-```
---workers 4 --threads 2 --timeout 30
-```
-
-### 7. Health Endpoints
-
-| Endpoint | Purpose | Status Codes |
-|----------|---------|--------------|
-| `/health/live` | Process liveness | 200 always (if Python process responding) |
-| `/health/ready` | Dependency readiness (DB, Redis) | 200 (ok) / 503 (degraded) |
-
-Example readiness success:
-```json
-{
-  "status": "ok",
-  "checks": {
-    "database": {"status": "ok", "latency_ms": 2.31},
-    "redis": {"status": "ok"}
-  }
-}
-```
-
-Example degraded (DB down):
-```json
-{
-  "status": "degraded",
-  "checks": {
-    "database": {"status": "fail", "error": "could not connect"},
-    "redis": {"status": "ok"}
-  }
-}
-```
-
-Kubernetes probe suggestions:
-```yaml
-livenessProbe:
-  httpGet: { path: /health/live, port: 8000 }
-  periodSeconds: 10
-readinessProbe:
-  httpGet: { path: /health/ready, port: 8000 }
-  initialDelaySeconds: 5
-  periodSeconds: 15
-  failureThreshold: 3
-```
-
-### 8. Makefile Quick Reference
-
-| Target | Description |
-|--------|-------------|
-| `prod-build` | Build production images |
-| `prod-up` | Start prod stack (detached) |
-| `prod-bootstrap` | build + up + migrate + seed (if seed command) |
-| `prod-migrate` | Run migrations |
-| `prod-seed` | Run seed command if present |
-| `prod-logs` | Tail web logs |
-| `prod-shell` | Shell into web container |
-| `prod-restart` | Restart web service |
-| `prod-down` | Stop (preserve volumes) |
-| `prod-destroy` | Stop & remove volumes |
-| `check-secret` | Inspect runtime SECRET_KEY |
-
-## Troubleshooting (Production)
-
-### SECRET_KEY is missing or using insecure default
-Cause: `DJANGO_SECRET_KEY` not exported or overridden with empty mapping in compose. Ensure `.env.prod` has a real value and no direct empty `DJANGO_SECRET_KEY:` line in `environment:`.
-
-Check inside container:
-```bash
-docker compose -f infra/docker-compose.prod.yml exec web env | grep DJANGO_SECRET_KEY
-```
-
-### `sh: 3: --workers: not found`
-Usually a side-effect after migration failure causing shell to mis-read the continued command. Fix the underlying error (often missing secret) and prefer a simplified `command` or entrypoint script.
-
-### Readiness returns 503
-Check DB connectivity and Redis URL. Run:
-```bash
-docker compose -f infra/docker-compose.prod.yml exec web python -c "import psycopg2,os;print('DB HOST',os.environ.get('POSTGRES_HOST'))"
-```
-
-### Need to rotate secret key
-Generate a new key, update `.env.prod`, recreate containers. Active JWTs signed with the old key become invalid (expected).
-
-### Migrations didn’t run
-Check logs for migration errors; re-run:
-```bash
-make prod-migrate
-```
-
-### How to add an entrypoint script (optional)
-Create `infra/entrypoint.sh`:
-```sh
-#!/bin/sh
-set -e
-python backend/manage.py migrate
-exec gunicorn fakestore.wsgi:application --chdir backend --bind 0.0.0.0:8000 --workers 3 --threads 2 --timeout 30
-```
-Dockerfile.prod snippet:
-```dockerfile
-COPY infra/entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
-CMD ["/app/entrypoint.sh"]
-```
-Remove the `command:` override in compose.
-
-
-## License
+- Infrastructure & deployment automation now live in the dedicated Ops repository; consult that project for Docker, Compose, and environment provisioning guidance.
