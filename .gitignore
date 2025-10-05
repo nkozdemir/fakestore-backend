@@ -102,3 +102,7 @@ node_modules/
 
 # Python dotenv backup
 .env.backup
+
+# Docker files
+docker-compose.yml
+Dockerfile

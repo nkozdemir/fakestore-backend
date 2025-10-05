@@ -1,5 +1,5 @@
 from typing import Optional, Dict, Any, Union
-import sys
+from django.conf import settings
 from django.core.cache import cache
 from .repositories import ProductRepository, CategoryRepository, RatingRepository
 from .mappers import ProductMapper, CategoryMapper
@@ -31,7 +31,7 @@ class ProductService:
 
     def list_products(self, category: Optional[str] = None):
         # During test runs, bypass cache to avoid stale reads from direct ORM writes in tests
-        if 'test' in sys.argv:
+        if getattr(settings, 'TESTING', False):
             qs = self.products.list_by_category(category) if category else self.products.list()
             return ProductMapper.many_to_dto(qs)
         # Read-through cache per category filter

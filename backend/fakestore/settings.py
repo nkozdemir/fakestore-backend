@@ -153,7 +153,9 @@ USING_PYTEST = (
     or any(os.path.basename(arg).startswith('pytest') for arg in sys.argv)
 )
 
-if 'test' in sys.argv or USING_PYTEST:
+TESTING = USING_PYTEST or ('test' in sys.argv)
+
+if TESTING:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
