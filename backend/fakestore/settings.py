@@ -148,7 +148,12 @@ CACHES = {
 }
 
 # Use SQLite for tests to simplify CI/dev without Postgres
-if 'test' in sys.argv:
+USING_PYTEST = (
+    os.getenv('PYTEST_CURRENT_TEST') is not None
+    or any(os.path.basename(arg).startswith('pytest') for arg in sys.argv)
+)
+
+if 'test' in sys.argv or USING_PYTEST:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
