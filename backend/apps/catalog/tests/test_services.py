@@ -1,3 +1,4 @@
+import types
 import unittest
 from apps.catalog.services import ProductService, CategoryService
 
@@ -212,6 +213,53 @@ class ProductServiceUnitTests(unittest.TestCase):
         summary = self.service.delete_user_rating(product.id, user_id=10)
         self.assertEqual(summary['rating']['count'], 0)
 
+    def test_list_products_cache_hit(self):
+        service_cache = ProductService(
+            products=self.product_repo,
+            ratings=self.rating_repo,
+            cache_backend=self.cache,
+            disable_cache=False,
+        )
+        self.product_repo.create(title='Cached', price='9.99', description='d', image='i')
+        original_list = self.product_repo.list
+        call_counter = {'count': 0}
+
+        def tracked_list(self, **filters):
+            call_counter['count'] += 1
+            return original_list(**filters)
+
+        self.product_repo.list = types.MethodType(tracked_list, self.product_repo)
+        first = service_cache.list_products()
+        second = service_cache.list_products()
+        self.assertEqual(call_counter['count'], 1)
+        self.assertEqual(first, second)
+        self.product_repo.list = original_list
+
+    def test_cache_version_bumped_on_mutations(self):
+        service_cache = ProductService(
+            products=self.product_repo,
+            ratings=self.rating_repo,
+            cache_backend=self.cache,
+            disable_cache=False,
+        )
+        dto = service_cache.create_product({'title': 'New', 'price': '1.00', 'description': '', 'image': ''})
+        version_after_create = self.cache.get(service_cache._cache_version_key)
+        self.assertEqual(version_after_create, service_cache._default_version + 1)
+        service_cache.update_product(dto.id, {'title': 'Updated'}, partial=True)
+        version_after_update = self.cache.get(service_cache._cache_version_key)
+        self.assertEqual(version_after_update, service_cache._default_version + 2)
+        service_cache.delete_product(dto.id)
+        version_after_delete = self.cache.get(service_cache._cache_version_key)
+        self.assertEqual(version_after_delete, service_cache._default_version + 3)
+
+    def test_rating_validation_and_missing_product(self):
+        error = self.service.set_user_rating(999, user_id=1, value=4)
+        self.assertEqual(error[0], 'NOT_FOUND')
+        error = self.service.set_user_rating(self.product_repo._pk, user_id=1, value=10)
+        self.assertEqual(error[0], 'VALIDATION_ERROR')
+        summary = self.service.get_rating_summary(999)
+        self.assertIsNone(summary)
+
 
 class CategoryServiceUnitTests(unittest.TestCase):
     def setUp(self):
@@ -225,7 +273,3 @@ class CategoryServiceUnitTests(unittest.TestCase):
         self.assertTrue(any(c.name == 'Toys' for c in categories))
         deleted = self.service.delete_category(dto.id)
         self.assertTrue(deleted)
-
-
-if __name__ == '__main__':
-    unittest.main()

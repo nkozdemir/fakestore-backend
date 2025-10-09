@@ -1,0 +1,226 @@
+import types
+import unittest
+from unittest.mock import Mock, patch
+from rest_framework.test import APIRequestFactory, force_authenticate
+from apps.carts.views import CartListView, CartDetailView, CartByUserView
+
+
+def make_product_payload(product_id=1):
+    return {
+        'id': product_id,
+        'title': f'Product {product_id}',
+        'price': '10.00',
+        'description': 'Desc',
+        'image': 'img',
+        'rate': '0',
+        'count': 0,
+        'categories': [],
+    }
+
+
+def make_cart_payload(cart_id=1, user_id=10):
+    return {
+        'id': cart_id,
+        'user_id': user_id,
+        'date': '2025-01-01',
+        'items': [
+            {
+                'product': make_product_payload(),
+                'quantity': 2,
+            }
+        ],
+    }
+
+
+class CartViewsUnitTests(unittest.TestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+
+    def test_cart_list_filters_by_user_param(self):
+        carts = [make_cart_payload()]
+        service_mock = Mock()
+        service_mock.list_carts.return_value = carts
+        with patch.object(CartListView, 'service', service_mock):
+            request = self.factory.get('/api/carts/', {'userId': 5})
+            response = CartListView.as_view()(request)
+        response.render()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, carts)
+        service_mock.list_carts.assert_called_once_with(user_id=5)
+
+    def test_cart_list_post_requires_authenticated_user_id(self):
+        service_mock = Mock()
+        user = types.SimpleNamespace(id=None, is_authenticated=True)
+        with patch.object(CartListView, 'service', service_mock):
+            request = self.factory.post('/api/carts/', {'products': []}, format='json')
+            force_authenticate(request, user=user)
+            response = CartListView.as_view()(request)
+        response.render()
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.data['error']['code'], 'UNAUTHORIZED')
+        service_mock.create_cart.assert_not_called()
+
+    def test_cart_list_post_creates_cart_with_user_from_request(self):
+        carts = make_cart_payload(cart_id=2, user_id=7)
+        service_mock = Mock()
+        service_mock.create_cart.return_value = carts
+        user = types.SimpleNamespace(id=7, is_authenticated=True)
+        payload = {
+            'date': '2025-01-02',
+            'products': [{'productId': 1, 'quantity': 2}],
+        }
+        with patch.object(CartListView, 'service', service_mock):
+            request = self.factory.post('/api/carts/', payload, format='json')
+            force_authenticate(request, user=user)
+            response = CartListView.as_view()(request)
+        response.render()
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data['id'], 2)
+        args, _ = service_mock.create_cart.call_args
+        self.assertEqual(args[0]['userId'], 7)
+
+    def test_cart_detail_get_not_found_returns_error(self):
+        service_mock = Mock()
+        service_mock.get_cart.return_value = None
+        with patch.object(CartDetailView, 'service', service_mock):
+            request = self.factory.get('/api/carts/1/')
+            response = CartDetailView.as_view()(request, cart_id=1)
+        response.render()
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.data['error']['code'], 'NOT_FOUND')
+
+    def test_cart_detail_get_success(self):
+        service_mock = Mock()
+        cart = make_cart_payload(cart_id=11, user_id=4)
+        service_mock.get_cart.return_value = cart
+        with patch.object(CartDetailView, 'service', service_mock):
+            request = self.factory.get('/api/carts/11/')
+            response = CartDetailView.as_view()(request, cart_id=11)
+        response.render()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['id'], 11)
+
+    def test_cart_detail_put_requires_authenticated_user(self):
+        service_mock = Mock()
+        payload = {'items': []}
+        user = types.SimpleNamespace(id=None, is_authenticated=True)
+        with patch.object(CartDetailView, 'service', service_mock):
+            request = self.factory.put('/api/carts/1/', payload, format='json')
+            force_authenticate(request, user=user)
+            response = CartDetailView.as_view()(request, cart_id=1)
+        response.render()
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.data['error']['code'], 'UNAUTHORIZED')
+
+    def test_cart_detail_put_returns_not_found_when_service_returns_none(self):
+        service_mock = Mock()
+        service_mock.update_cart.return_value = None
+        user = types.SimpleNamespace(id=9, is_authenticated=True)
+        payload = {'items': [], 'date': '2025-01-01'}
+        with patch.object(CartDetailView, 'service', service_mock):
+            request = self.factory.put('/api/carts/1/', payload, format='json')
+            force_authenticate(request, user=user)
+            response = CartDetailView.as_view()(request, cart_id=1)
+        response.render()
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.data['error']['code'], 'NOT_FOUND')
+
+    def test_cart_detail_put_success(self):
+        service_mock = Mock()
+        updated = make_cart_payload(cart_id=2, user_id=9)
+        service_mock.update_cart.return_value = updated
+        user = types.SimpleNamespace(id=9, is_authenticated=True)
+        payload = {'items': [], 'date': '2025-01-01'}
+        with patch.object(CartDetailView, 'service', service_mock):
+            request = self.factory.put('/api/carts/2/', payload, format='json')
+            force_authenticate(request, user=user)
+            response = CartDetailView.as_view()(request, cart_id=2)
+        response.render()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['id'], 2)
+
+    def test_cart_detail_patch_returns_error_when_missing(self):
+        service_mock = Mock()
+        service_mock.patch_operations.return_value = None
+        user = types.SimpleNamespace(id=4, is_authenticated=True)
+        payload = {'add': [{'productId': 1, 'quantity': 1}]}
+        with patch.object(CartDetailView, 'service', service_mock):
+            request = self.factory.patch('/api/carts/1/', payload, format='json')
+            force_authenticate(request, user=user)
+            response = CartDetailView.as_view()(request, cart_id=1)
+        response.render()
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.data['error']['code'], 'NOT_FOUND')
+
+    def test_cart_detail_patch_success(self):
+        service_mock = Mock()
+        patched = make_cart_payload(cart_id=1, user_id=4)
+        service_mock.patch_operations.return_value = patched
+        user = types.SimpleNamespace(id=4, is_authenticated=True)
+        payload = {'add': [{'productId': 1, 'quantity': 1}]}
+        with patch.object(CartDetailView, 'service', service_mock):
+            request = self.factory.patch('/api/carts/1/', payload, format='json')
+            force_authenticate(request, user=user)
+            response = CartDetailView.as_view()(request, cart_id=1)
+        response.render()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['id'], 1)
+
+    def test_cart_detail_patch_requires_authentication(self):
+        service_mock = Mock()
+        payload = {'add': [{'productId': 1, 'quantity': 1}]}
+        user = types.SimpleNamespace(id=None, is_authenticated=True)
+        with patch.object(CartDetailView, 'service', service_mock):
+            request = self.factory.patch('/api/carts/1/', payload, format='json')
+            force_authenticate(request, user=user)
+            response = CartDetailView.as_view()(request, cart_id=1)
+        response.render()
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.data['error']['code'], 'UNAUTHORIZED')
+
+    def test_cart_detail_delete_success(self):
+        service_mock = Mock()
+        service_mock.delete_cart.return_value = True
+        user = types.SimpleNamespace(id=3, is_authenticated=True)
+        with patch.object(CartDetailView, 'service', service_mock):
+            request = self.factory.delete('/api/carts/1/')
+            force_authenticate(request, user=user)
+            response = CartDetailView.as_view()(request, cart_id=1)
+        response.render()
+        self.assertEqual(response.status_code, 204)
+        service_mock.delete_cart.assert_called_once_with(1, user_id=3)
+
+    def test_cart_detail_delete_not_found(self):
+        service_mock = Mock()
+        service_mock.delete_cart.return_value = False
+        user = types.SimpleNamespace(id=3, is_authenticated=True)
+        with patch.object(CartDetailView, 'service', service_mock):
+            request = self.factory.delete('/api/carts/1/')
+            force_authenticate(request, user=user)
+            response = CartDetailView.as_view()(request, cart_id=1)
+        response.render()
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.data['error']['code'], 'NOT_FOUND')
+
+    def test_cart_detail_delete_requires_authentication(self):
+        service_mock = Mock()
+        user = types.SimpleNamespace(id=None, is_authenticated=True)
+        with patch.object(CartDetailView, 'service', service_mock):
+            request = self.factory.delete('/api/carts/1/')
+            force_authenticate(request, user=user)
+            response = CartDetailView.as_view()(request, cart_id=1)
+        response.render()
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.data['error']['code'], 'UNAUTHORIZED')
+
+    def test_cart_by_user_view_returns_data(self):
+        carts = [make_cart_payload(cart_id=5, user_id=12)]
+        service_mock = Mock()
+        service_mock.list_carts.return_value = carts
+        with patch.object(CartByUserView, 'service', service_mock):
+            request = self.factory.get('/api/users/12/carts/')
+            response = CartByUserView.as_view()(request, user_id=12)
+        response.render()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, carts)
+        service_mock.list_carts.assert_called_once_with(user_id=12)
