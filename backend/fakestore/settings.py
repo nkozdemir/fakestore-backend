@@ -147,30 +147,6 @@ CACHES = {
     }
 }
 
-# Use SQLite for tests to simplify CI/dev without Postgres
-USING_PYTEST = (
-    os.getenv('PYTEST_CURRENT_TEST') is not None
-    or any(os.path.basename(arg).startswith('pytest') for arg in sys.argv)
-)
-
-TESTING = USING_PYTEST or ('test' in sys.argv)
-
-if TESTING:
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
-    }
-    # Use local in-memory cache during tests
-    CACHES = {
-        'default': {
-            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-            'LOCATION': 'fakestore-test-cache',
-            'TIMEOUT': 60,
-        }
-    }
-
 AUTH_PASSWORD_VALIDATORS = []
 
 LANGUAGE_CODE = 'en-us'

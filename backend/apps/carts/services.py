@@ -8,12 +8,19 @@ from apps.catalog.repositories import ProductRepository
 from django.utils import timezone
 
 class CartService:
-    def __init__(self):
-        self.carts = CartRepository()
-        self.cart_products = CartProductRepository()
-        self.products = ProductRepository()
-        self.cart_product_mapper = CartProductMapper()
-        self.cart_mapper = CartMapper(self.cart_product_mapper)
+    def __init__(
+        self,
+        carts: Optional[CartRepository] = None,
+        cart_products: Optional[CartProductRepository] = None,
+        products: Optional[ProductRepository] = None,
+        cart_product_mapper: Optional[CartProductMapper] = None,
+        cart_mapper: Optional[CartMapper] = None,
+    ):
+        self.carts = carts or CartRepository()
+        self.cart_products = cart_products or CartProductRepository()
+        self.products = products or ProductRepository()
+        self.cart_product_mapper = cart_product_mapper or CartProductMapper()
+        self.cart_mapper = cart_mapper or CartMapper(self.cart_product_mapper)
 
     def list_carts(self, user_id: Optional[int] = None):
         qs = self.carts.list(user_id=user_id) if user_id else self.carts.list()
@@ -108,7 +115,7 @@ class CartService:
 
     # Helper methods
     def _rebuild_items(self, cart: Cart, raw_items: List[Dict[str, Any]]):
-        self.cart_products.model.objects.filter(cart=cart).delete()
+        self.cart_products.delete_for_cart(cart)
         for raw in raw_items:
             cmd = CartItemCommand.from_raw(raw)
             if not cmd:
@@ -150,7 +157,7 @@ class CartService:
             product = self.products.get(id=item.product_id)
             if not product:
                 continue
-            cp = self.cart_products.list_for_cart(cart.id).filter(product_id=item.product_id).first()
+            cp = self.cart_products.get_for_cart_product(cart.id, item.product_id)
             if not cp:
                 self.cart_products.create(cart=cart, product=product, quantity=item.quantity)
             else:
@@ -159,4 +166,4 @@ class CartService:
 
     def _apply_remove_ops(self, cart: Cart, remove_ops: List[int]):
         for pid in remove_ops:
-            self.cart_products.model.objects.filter(cart=cart, product_id=pid).delete()
+            self.cart_products.delete_product(cart, pid)

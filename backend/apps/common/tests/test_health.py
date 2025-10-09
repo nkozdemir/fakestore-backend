@@ -1,30 +1,33 @@
-from django.test import TestCase, override_settings
-from django.urls import reverse
+import json
+import unittest
 from unittest import mock
+from apps.common import views
 
 
-class HealthEndpointsTests(TestCase):
-    def test_live_health(self):
-        resp = self.client.get('/health/live')
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json().get('status'), 'alive')
+class HealthViewsUnitTests(unittest.TestCase):
+    def test_live_health_returns_alive_payload(self):
+        response = views.live_health(None)
+        self.assertEqual(response.status_code, 200)
+        payload = json.loads(response.content)
+        self.assertEqual(payload['status'], 'alive')
 
-    def test_ready_health_ok(self):
-        resp = self.client.get('/health/ready')
-        self.assertEqual(resp.status_code, 200)
-        data = resp.json()
-        self.assertIn('checks', data)
-        self.assertEqual(data['status'], 'ok')  # DB should respond in test
+    @mock.patch('apps.common.views.os.getenv', return_value=None)
+    @mock.patch('apps.common.views._db_check', return_value={'status': 'ok', 'latency_ms': 1.23})
+    def test_ready_health_ok_when_dependencies_pass(self, mock_db_check, _mock_getenv):
+        response = views.ready_health(None)
+        self.assertEqual(response.status_code, 200)
+        payload = json.loads(response.content)
+        self.assertEqual(payload['status'], 'ok')
+        self.assertEqual(payload['checks']['database'], mock_db_check.return_value)
+        self.assertEqual(payload['checks']['redis']['status'], 'skipped')
 
-    @mock.patch('apps.common.views.connections')
-    def test_ready_health_db_failure(self, mock_connections):
-        class DummyConn:
-            def cursor(self):
-                class C:  # noqa: D401
-                    def execute(self, *_args, **_kwargs):
-                        raise Exception('db down')
-                return C()
-        mock_connections.__getitem__.return_value = DummyConn()
-        resp = self.client.get('/health/ready')
-        self.assertEqual(resp.status_code, 503)
-        self.assertEqual(resp.json()['status'], 'degraded')
+    @mock.patch('apps.common.views.os.getenv', return_value='redis://localhost')
+    @mock.patch('apps.common.views._redis_ping', return_value={'status': 'fail', 'error': 'unreachable'})
+    @mock.patch('apps.common.views._db_check', return_value={'status': 'fail', 'error': 'db down'})
+    def test_ready_health_degraded_on_dependency_failure(self, mock_db_check, mock_redis_ping, _mock_getenv):
+        response = views.ready_health(None)
+        self.assertEqual(response.status_code, 503)
+        payload = json.loads(response.content)
+        self.assertEqual(payload['status'], 'degraded')
+        self.assertEqual(payload['checks']['database'], mock_db_check.return_value)
+        self.assertEqual(payload['checks']['redis'], mock_redis_ping.return_value)

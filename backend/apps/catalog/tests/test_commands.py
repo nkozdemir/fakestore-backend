@@ -1,7 +1,7 @@
-from django.test import TestCase
+import unittest
 from apps.catalog.commands import ProductCreateCommand, ProductUpdateCommand, RatingSetCommand
 
-class ProductCommandTests(TestCase):
+class ProductCommandTests(unittest.TestCase):
     def test_create_command_parses_categories_and_strips_id(self):
         cmd = ProductCreateCommand.from_raw({
             'id': 999,
@@ -14,7 +14,7 @@ class ProductCommandTests(TestCase):
             'count': 3,
         })
         self.assertEqual(cmd.title, 'Phone')
-        self.assertEqual(cmd.categories, [1,2])
+        self.assertEqual(cmd.categories, [1, 2])
         self.assertIsNone(getattr(cmd, 'id', None))
 
     def test_update_command_partial(self):
@@ -28,4 +28,3 @@ class ProductCommandTests(TestCase):
     def test_rating_set_command_invalid_value(self):
         cmd = RatingSetCommand.from_raw(7, 2, 'bad')
         self.assertEqual(cmd.value, -1)
-

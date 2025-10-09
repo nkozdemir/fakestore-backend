@@ -21,3 +21,12 @@ class CartProductRepository(GenericRepository[CartProduct]):
 
     def list_for_cart(self, cart_id: int):
         return self.model.objects.filter(cart_id=cart_id)
+
+    def delete_for_cart(self, cart: Cart):
+        self.model.objects.filter(cart=cart).delete()
+
+    def get_for_cart_product(self, cart_id: int, product_id: int):
+        return self.model.objects.filter(cart_id=cart_id, product_id=product_id).first()
+
+    def delete_product(self, cart: Cart, product_id: int):
+        self.model.objects.filter(cart=cart, product_id=product_id).delete()

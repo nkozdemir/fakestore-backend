@@ -1,8 +1,7 @@
-from django.test import TestCase
-from datetime import date
+import unittest
 from apps.carts.commands import CartCreateCommand, CartPatchCommand
 
-class CartCommandTests(TestCase):
+class CartCommandTests(unittest.TestCase):
     def test_cart_create_command_normalization(self):
         cmd = CartCreateCommand.from_raw({
             'userId': '12',
@@ -16,7 +15,7 @@ class CartCommandTests(TestCase):
         })
         self.assertEqual(cmd.user_id, 12)
         self.assertEqual(len(cmd.items), 2)
-        self.assertEqual({i.product_id for i in cmd.items}, {5,7})
+        self.assertEqual({i.product_id for i in cmd.items}, {5, 7})
 
     def test_cart_patch_command(self):
         cmd = CartPatchCommand.from_raw(9, {

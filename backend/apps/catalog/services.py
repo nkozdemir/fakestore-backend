@@ -1,5 +1,4 @@
 from typing import Optional, Dict, Any, Union
-from django.conf import settings
 from django.core.cache import cache
 from .repositories import ProductRepository, CategoryRepository, RatingRepository
 from .mappers import ProductMapper, CategoryMapper
@@ -7,22 +6,30 @@ from .models import Product, Category, Rating
 from .commands import ProductCreateCommand, ProductUpdateCommand, RatingSetCommand
 
 class ProductService:
-    def __init__(self):
-        self.products = ProductRepository()
-        self.ratings = RatingRepository()
+    def __init__(
+        self,
+        products: Optional[ProductRepository] = None,
+        ratings: Optional[RatingRepository] = None,
+        cache_backend=None,
+        disable_cache: bool = False,
+    ):
+        self.products = products or ProductRepository()
+        self.ratings = ratings or RatingRepository()
+        self.cache = cache_backend or cache
+        self.disable_cache = disable_cache
         # Caching keys
         self._cache_prefix = 'products:list'
         self._cache_version_key = f'{self._cache_prefix}:version'
         self._default_version = 1
 
     def _get_cache_version(self) -> int:
-        v = cache.get(self._cache_version_key)
+        v = self.cache.get(self._cache_version_key)
         return v or self._default_version
 
     def _bump_cache_version(self) -> None:
         v = self._get_cache_version()
         # Version key should not expire
-        cache.set(self._cache_version_key, v + 1, timeout=None)
+        self.cache.set(self._cache_version_key, v + 1, timeout=None)
 
     def _cache_key(self, category: Optional[str]) -> str:
         version = self._get_cache_version()
@@ -30,18 +37,17 @@ class ProductService:
         return f'{self._cache_prefix}:v{version}:{cat}'
 
     def list_products(self, category: Optional[str] = None):
-        # During test runs, bypass cache to avoid stale reads from direct ORM writes in tests
-        if getattr(settings, 'TESTING', False):
+        if self.disable_cache:
             qs = self.products.list_by_category(category) if category else self.products.list()
             return ProductMapper.many_to_dto(qs)
         # Read-through cache per category filter
         key = self._cache_key(category)
-        cached = cache.get(key)
+        cached = self.cache.get(key)
         if cached is not None:
             return cached
         qs = self.products.list_by_category(category) if category else self.products.list()
         data = ProductMapper.many_to_dto(qs)
-        cache.set(key, data)
+        self.cache.set(key, data)
         return data
 
     def list_products_by_category_ids(self, category_ids):
@@ -147,8 +153,8 @@ class ProductService:
         return self.get_rating_summary(product_id, user_id)
 
 class CategoryService:
-    def __init__(self):
-        self.categories = CategoryRepository()
+    def __init__(self, categories: Optional[CategoryRepository] = None):
+        self.categories = categories or CategoryRepository()
 
     def list_categories(self):
         return CategoryMapper.many_to_dto(self.categories.list())
