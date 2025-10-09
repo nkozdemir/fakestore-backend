@@ -171,7 +171,7 @@ class CartServiceUnitTests(unittest.TestCase):
         self.atomic_patcher.stop()
 
     def test_create_and_get_cart(self):
-        dto = self.service.create_cart({'userId': 5, 'products': [
+        dto = self.service.create_cart(5, {'products': [
             {'productId': 1, 'quantity': 2},
             {'productId': 2, 'quantity': 1},
         ]})
@@ -179,7 +179,7 @@ class CartServiceUnitTests(unittest.TestCase):
         self.assertEqual(len(fetched.items), 2)
 
     def test_update_cart_replace_items(self):
-        dto = self.service.create_cart({'userId': 6, 'products': [
+        dto = self.service.create_cart(6, {'products': [
             {'productId': 1, 'quantity': 1},
         ]})
         updated = self.service.update_cart(dto.id, {
@@ -190,7 +190,7 @@ class CartServiceUnitTests(unittest.TestCase):
         self.assertEqual(updated.items[0].quantity, 3)
 
     def test_patch_operations(self):
-        dto = self.service.create_cart({'userId': 7, 'products': [
+        dto = self.service.create_cart(7, {'products': [
             {'productId': 1, 'quantity': 1},
         ]})
         patched = self.service.patch_operations(dto.id, {
@@ -203,7 +203,7 @@ class CartServiceUnitTests(unittest.TestCase):
         self.assertEqual(quantities[2], 2)
 
     def test_delete_cart(self):
-        dto = self.service.create_cart({'userId': 8, 'products': [
+        dto = self.service.create_cart(8, {'products': [
             {'productId': 1, 'quantity': 1},
         ]})
         result = self.service.delete_cart(dto.id)

@@ -54,9 +54,7 @@ class CartListView(APIView):
         user_id = getattr(request, 'validated_user_id', None)
         if user_id is None:
             return error_response('UNAUTHORIZED', 'Authentication required')
-        payload = dict(serializer.validated_data)
-        payload['userId'] = int(user_id)
-        dto = self.service.create_cart(payload)
+        dto = self.service.create_cart(int(user_id), serializer.validated_data)
         return Response(CartReadSerializer(dto).data, status=status.HTTP_201_CREATED)
 
 @extend_schema(tags=["Carts"])

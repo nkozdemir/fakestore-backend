@@ -86,7 +86,8 @@ class CartViewsUnitTests(unittest.TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data['id'], 2)
         args, _ = service_mock.create_cart.call_args
-        self.assertEqual(args[0]['userId'], 7)
+        self.assertEqual(args[0], 7)
+        self.assertEqual(args[1]['products'][0]['productId'], 1)
 
     def test_cart_detail_get_not_found_returns_error(self):
         service_mock = Mock()

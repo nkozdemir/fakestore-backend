@@ -2,6 +2,7 @@ import types
 import unittest
 from unittest.mock import patch
 from rest_framework import status
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from apps.auth.views import RegisterView, MeView, LogoutView, LogoutAllView
 
 
@@ -73,7 +74,10 @@ class AuthViewsUnitTests(unittest.TestCase):
     def tearDown(self):
         self.user_patch.stop()
 
-    def test_register_success(self):
+    @patch('apps.auth.views.RegistrationService')
+    def test_register_success(self, service_cls):
+        service = service_cls.return_value
+        service.register.return_value = {'id': 1, 'username': 'newuser', 'email': 'new@example.com'}
         request = DummyRequest({
             'username': 'newuser',
             'email': 'new@example.com',
@@ -82,14 +86,17 @@ class AuthViewsUnitTests(unittest.TestCase):
             'last_name': 'Last',
             'phone': '1234567890',
         })
-        response = RegisterView().post(request)
+        view = RegisterView()
+        view.service = service
+        response = view.post(request)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data['username'], 'newuser')
         self.assertEqual(response.data['email'], 'new@example.com')
 
-    def test_register_detects_duplicates_and_missing_fields(self):
-        # Prime manager with existing username/email
-        self.user_manager.create(username='taken', email='taken@example.com')
+    @patch('apps.auth.views.RegistrationService')
+    def test_register_detects_duplicates_and_missing_fields(self, service_cls):
+        service = service_cls.return_value
+        service.register.return_value = ('VALIDATION_ERROR', 'Username already exists', {'username': 'taken'})
         duplicate = DummyRequest({
             'username': 'taken',
             'email': 'other@example.com',
@@ -97,14 +104,16 @@ class AuthViewsUnitTests(unittest.TestCase):
             'first_name': 'A',
             'last_name': 'B',
         })
-        resp_dup = RegisterView().post(duplicate)
+        view = RegisterView()
+        view.service = service
+        resp_dup = view.post(duplicate)
         self.assertEqual(resp_dup.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(resp_dup.data['error']['code'], 'VALIDATION_ERROR')
 
-        missing = DummyRequest({'username': 'x'})
-        resp_missing = RegisterView().post(missing)
-        self.assertEqual(resp_missing.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('missing', resp_missing.data['error']['details'])
+        missing = DummyRequest({'username': 'x', 'email': 'x@example.com'})
+        with self.assertRaises(DRFValidationError):
+            view.post(missing)
+        service.register.assert_called_once()
 
     def test_me_view_returns_profile(self):
         user = types.SimpleNamespace(

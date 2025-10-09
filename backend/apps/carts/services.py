@@ -30,9 +30,10 @@ class CartService:
         c = self.carts.get(id=cart_id)
         return self.cart_mapper.to_dto(c) if c else None
 
-    def create_cart(self, data: Dict[str, Any]):
-        # Accept raw dict or already-built command
-        cmd = data if isinstance(data, CartCreateCommand) else CartCreateCommand.from_raw(data)
+    def create_cart(self, user_id: int, data: Dict[str, Any]):
+        payload = dict(data)
+        payload['userId'] = user_id
+        cmd = payload if isinstance(payload, CartCreateCommand) else CartCreateCommand.from_raw(payload)
         create_kwargs: Dict[str, Any] = {
             'date': cmd.date,
         }

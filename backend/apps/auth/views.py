@@ -5,7 +5,6 @@ from django.contrib.auth import authenticate, get_user_model
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken, OutstandingToken, BlacklistedToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from django.contrib.auth.hashers import make_password
 from apps.api.utils import error_response
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 from apps.api.schemas import ErrorResponseSerializer
@@ -16,36 +15,27 @@ from .serializers import (
     LogoutRequestSerializer,
     DetailResponseSerializer,
 )
+from .services import RegistrationService
 
 User = get_user_model()
 
 @extend_schema(tags=["Auth"])
 class RegisterView(APIView):
     permission_classes = [AllowAny]
+    service = RegistrationService()
     @extend_schema(
         summary="Register user",
         request=RegisterRequestSerializer,
         responses={201: RegisterResponseSerializer, 400: OpenApiResponse(response=ErrorResponseSerializer)},
     )
     def post(self, request):
-        data = request.data.copy()
-        required = ['username', 'email', 'password', 'first_name', 'last_name']
-        missing = [f for f in required if not data.get(f)]
-        if missing:
-            return error_response('VALIDATION_ERROR', 'Missing fields', {'missing': missing})
-        if User.objects.filter(username=data['username']).exists():
-            return error_response('VALIDATION_ERROR', 'Username already exists', {'username': data['username']})
-        if User.objects.filter(email=data['email']).exists():
-            return error_response('VALIDATION_ERROR', 'Email already exists', {'email': data['email']})
-        data['password'] = make_password(data['password'])
-        payload = {k: data[k] for k in required if k != 'password'}
-        # If custom fields exist on the model (firstname/lastname), populate them too
-        if hasattr(User, 'firstname'):
-            payload['firstname'] = data['first_name']
-        if hasattr(User, 'lastname'):
-            payload['lastname'] = data['last_name']
-        user = User.objects.create(**payload, password=data['password'])
-        return Response({'id': user.id, 'username': user.username, 'email': user.email}, status=status.HTTP_201_CREATED)
+        serializer = RegisterRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = self.service.register(serializer.validated_data)
+        if isinstance(result, tuple):
+            code, message, details = result
+            return error_response(code, message, details)
+        return Response(RegisterResponseSerializer(result).data, status=status.HTTP_201_CREATED)
 
 @extend_schema(tags=["Auth"], summary="Login (JWT obtain pair)")
 class LoginView(TokenObtainPairView):
