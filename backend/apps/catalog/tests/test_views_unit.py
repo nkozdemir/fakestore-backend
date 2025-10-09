@@ -13,6 +13,7 @@ from apps.catalog.views import (
     ProductByCategoriesView,
 )
 from apps.catalog.dtos import ProductDTO, CategoryDTO
+from apps.api.validation import validate_request_context
 
 
 def make_product_dto(product_id=1, title='Widget'):
@@ -36,6 +37,17 @@ class CatalogViewsUnitTests(unittest.TestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
 
+    def dispatch(self, request, view_cls, **kwargs):
+        pre_response = validate_request_context(request, view_cls, kwargs)
+        if pre_response is not None:
+            return pre_response
+        view = view_cls.as_view()
+        return view(request, **kwargs)
+
+    def authenticate(self, request, user):
+        request.user = user
+        force_authenticate(request, user=user)
+
     def test_product_list_paginates_and_filters(self):
         dto1 = make_product_dto(1)
         dto2 = make_product_dto(2, title='Gadget')
@@ -43,8 +55,7 @@ class CatalogViewsUnitTests(unittest.TestCase):
         service_mock.list_products.return_value = [dto1, dto2]
         with patch.object(ProductListView, 'service', service_mock):
             request = self.factory.get('/api/products/', {'limit': 1, 'category': 'electronics'})
-            response = ProductListView.as_view()(request)
-        response.render()
+            response = self.dispatch(request, ProductListView)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['count'], 2)
         self.assertEqual(len(response.data['results']), 1)
@@ -63,9 +74,8 @@ class CatalogViewsUnitTests(unittest.TestCase):
         user = types.SimpleNamespace(id=1, is_authenticated=True)
         with patch.object(ProductListView, 'service', service_mock):
             request = self.factory.post('/api/products/', payload, format='json')
-            force_authenticate(request, user=user)
-            response = ProductListView.as_view()(request)
-        response.render()
+            self.authenticate(request, user)
+            response = self.dispatch(request, ProductListView)
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data['title'], 'Created')
         args, kwargs = service_mock.create_product.call_args
@@ -77,8 +87,7 @@ class CatalogViewsUnitTests(unittest.TestCase):
         service_mock.get_product.return_value = None
         with patch.object(ProductDetailView, 'service', service_mock):
             request = self.factory.get('/api/products/10/')
-            response = ProductDetailView.as_view()(request, product_id=10)
-        response.render()
+            response = self.dispatch(request, ProductDetailView, product_id=10)
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.data['error']['code'], 'NOT_FOUND')
 
@@ -88,8 +97,7 @@ class CatalogViewsUnitTests(unittest.TestCase):
         service_mock.get_product.return_value = dto
         with patch.object(ProductDetailView, 'service', service_mock):
             request = self.factory.get('/api/products/5/')
-            response = ProductDetailView.as_view()(request, product_id=5)
-        response.render()
+            response = self.dispatch(request, ProductDetailView, product_id=5)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['title'], 'LookUp')
 
@@ -105,9 +113,8 @@ class CatalogViewsUnitTests(unittest.TestCase):
         user = types.SimpleNamespace(id=2, is_authenticated=True)
         with patch.object(ProductDetailView, 'service', service_mock):
             request = self.factory.put('/api/products/1/', payload, format='json')
-            force_authenticate(request, user=user)
-            response = ProductDetailView.as_view()(request, product_id=1)
-        response.render()
+            self.authenticate(request, user)
+            response = self.dispatch(request, ProductDetailView, product_id=1)
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.data['error']['code'], 'NOT_FOUND')
 
@@ -117,9 +124,8 @@ class CatalogViewsUnitTests(unittest.TestCase):
         user = types.SimpleNamespace(id=3, is_authenticated=True)
         with patch.object(ProductDetailView, 'service', service_mock):
             request = self.factory.delete('/api/products/2/')
-            force_authenticate(request, user=user)
-            response = ProductDetailView.as_view()(request, product_id=2)
-        response.render()
+            self.authenticate(request, user)
+            response = self.dispatch(request, ProductDetailView, product_id=2)
         self.assertEqual(response.status_code, 204)
 
     def test_product_detail_delete_not_found(self):
@@ -128,9 +134,8 @@ class CatalogViewsUnitTests(unittest.TestCase):
         user = types.SimpleNamespace(id=9, is_authenticated=True)
         with patch.object(ProductDetailView, 'service', service_mock):
             request = self.factory.delete('/api/products/8/')
-            force_authenticate(request, user=user)
-            response = ProductDetailView.as_view()(request, product_id=8)
-        response.render()
+            self.authenticate(request, user)
+            response = self.dispatch(request, ProductDetailView, product_id=8)
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.data['detail'], 'Not found')
 
@@ -140,9 +145,8 @@ class CatalogViewsUnitTests(unittest.TestCase):
         user = types.SimpleNamespace(id=4, is_authenticated=True)
         with patch.object(ProductDetailView, 'service', service_mock):
             request = self.factory.patch('/api/products/3/', {'title': 'New'}, format='json')
-            force_authenticate(request, user=user)
-            response = ProductDetailView.as_view()(request, product_id=3)
-        response.render()
+            self.authenticate(request, user)
+            response = self.dispatch(request, ProductDetailView, product_id=3)
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.data['detail'], 'Not found')
 
@@ -159,9 +163,8 @@ class CatalogViewsUnitTests(unittest.TestCase):
         user = types.SimpleNamespace(id=11, is_authenticated=True)
         with patch.object(ProductDetailView, 'service', service_mock):
             request = self.factory.put('/api/products/6/', payload, format='json')
-            force_authenticate(request, user=user)
-            response = ProductDetailView.as_view()(request, product_id=6)
-        response.render()
+            self.authenticate(request, user)
+            response = self.dispatch(request, ProductDetailView, product_id=6)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['title'], 'Updated')
 
@@ -174,9 +177,8 @@ class CatalogViewsUnitTests(unittest.TestCase):
         user = types.SimpleNamespace(id=12, is_authenticated=True)
         with patch.object(ProductDetailView, 'service', service_mock):
             request = self.factory.patch('/api/products/7/', {'title': 'Patched'}, format='json')
-            force_authenticate(request, user=user)
-            response = ProductDetailView.as_view()(request, product_id=7)
-        response.render()
+            self.authenticate(request, user)
+            response = self.dispatch(request, ProductDetailView, product_id=7)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['title'], 'Patched')
 
@@ -189,16 +191,14 @@ class CatalogViewsUnitTests(unittest.TestCase):
         user = types.SimpleNamespace(id=20, is_authenticated=True)
         with patch.object(CategoryListView, 'service', service_mock):
             request_get = self.factory.get('/api/categories/')
-            response_get = CategoryListView.as_view()(request_get)
-        response_get.render()
+            response_get = self.dispatch(request_get, CategoryListView)
         self.assertEqual(response_get.status_code, 200)
         self.assertEqual(response_get.data[0]['name'], 'A')
 
         with patch.object(CategoryListView, 'service', service_mock):
             request_post = self.factory.post('/api/categories/', {'name': 'B'}, format='json')
-            force_authenticate(request_post, user=user)
-            response_post = CategoryListView.as_view()(request_post)
-        response_post.render()
+            self.authenticate(request_post, user)
+            response_post = self.dispatch(request_post, CategoryListView)
         self.assertEqual(response_post.status_code, 201)
         self.assertEqual(response_post.data['name'], 'B')
 
@@ -207,15 +207,13 @@ class CatalogViewsUnitTests(unittest.TestCase):
         service_mock.get_category.side_effect = [make_category_dto(3, 'Found'), None]
         with patch.object(CategoryDetailView, 'service', service_mock):
             request_get = self.factory.get('/api/categories/3/')
-            response_get = CategoryDetailView.as_view()(request_get, category_id=3)
-        response_get.render()
+            response_get = self.dispatch(request_get, CategoryDetailView, category_id=3)
         self.assertEqual(response_get.status_code, 200)
         self.assertEqual(response_get.data['name'], 'Found')
 
         with patch.object(CategoryDetailView, 'service', service_mock):
             request_missing = self.factory.get('/api/categories/4/')
-            response_missing = CategoryDetailView.as_view()(request_missing, category_id=4)
-        response_missing.render()
+            response_missing = self.dispatch(request_missing, CategoryDetailView, category_id=4)
         self.assertEqual(response_missing.status_code, 404)
         self.assertEqual(response_missing.data['error']['code'], 'NOT_FOUND')
 
@@ -231,41 +229,36 @@ class CatalogViewsUnitTests(unittest.TestCase):
 
         with patch.object(CategoryDetailView, 'service', service_mock):
             request_put = self.factory.put('/api/categories/5/', {'name': 'Updated'}, format='json')
-            force_authenticate(request_put, user=user)
-            response_put = CategoryDetailView.as_view()(request_put, category_id=5)
-        response_put.render()
+            self.authenticate(request_put, user)
+            response_put = self.dispatch(request_put, CategoryDetailView, category_id=5)
         self.assertEqual(response_put.status_code, 200)
         self.assertEqual(response_put.data['name'], 'Updated')
 
         with patch.object(CategoryDetailView, 'service', service_mock):
             request_patch_missing = self.factory.patch('/api/categories/5/', {'name': 'Missing'}, format='json')
-            force_authenticate(request_patch_missing, user=user)
-            response_patch_missing = CategoryDetailView.as_view()(request_patch_missing, category_id=5)
-        response_patch_missing.render()
+            self.authenticate(request_patch_missing, user)
+            response_patch_missing = self.dispatch(request_patch_missing, CategoryDetailView, category_id=5)
         self.assertEqual(response_patch_missing.status_code, 404)
         self.assertEqual(response_patch_missing.data['error']['code'], 'NOT_FOUND')
 
         with patch.object(CategoryDetailView, 'service', service_mock):
             request_patch = self.factory.patch('/api/categories/5/', {'name': 'Patched'}, format='json')
-            force_authenticate(request_patch, user=user)
-            response_patch = CategoryDetailView.as_view()(request_patch, category_id=5)
-        response_patch.render()
+            self.authenticate(request_patch, user)
+            response_patch = self.dispatch(request_patch, CategoryDetailView, category_id=5)
         self.assertEqual(response_patch.status_code, 200)
         self.assertEqual(response_patch.data['name'], 'Patched')
 
         with patch.object(CategoryDetailView, 'service', service_mock):
             request_delete_missing = self.factory.delete('/api/categories/5/')
-            force_authenticate(request_delete_missing, user=user)
-            response_delete_missing = CategoryDetailView.as_view()(request_delete_missing, category_id=5)
-        response_delete_missing.render()
+            self.authenticate(request_delete_missing, user)
+            response_delete_missing = self.dispatch(request_delete_missing, CategoryDetailView, category_id=5)
         self.assertEqual(response_delete_missing.status_code, 404)
         self.assertEqual(response_delete_missing.data['error']['code'], 'NOT_FOUND')
 
         with patch.object(CategoryDetailView, 'service', service_mock):
             request_delete = self.factory.delete('/api/categories/5/')
-            force_authenticate(request_delete, user=user)
-            response_delete = CategoryDetailView.as_view()(request_delete, category_id=5)
-        response_delete.render()
+            self.authenticate(request_delete, user)
+            response_delete = self.dispatch(request_delete, CategoryDetailView, category_id=5)
         self.assertEqual(response_delete.status_code, 204)
 
     def test_category_detail_put_not_found(self):
@@ -274,9 +267,8 @@ class CatalogViewsUnitTests(unittest.TestCase):
         user = types.SimpleNamespace(id=31, is_authenticated=True)
         with patch.object(CategoryDetailView, 'service', service_mock):
             request_put = self.factory.put('/api/categories/9/', {'name': 'Missing'}, format='json')
-            force_authenticate(request_put, user=user)
-            response_put = CategoryDetailView.as_view()(request_put, category_id=9)
-        response_put.render()
+            self.authenticate(request_put, user)
+            response_put = self.dispatch(request_put, CategoryDetailView, category_id=9)
         self.assertEqual(response_put.status_code, 404)
         self.assertEqual(response_put.data['error']['code'], 'NOT_FOUND')
 
@@ -285,9 +277,8 @@ class CatalogViewsUnitTests(unittest.TestCase):
         user = types.SimpleNamespace(id=None, is_authenticated=True)
         with patch.object(ProductRatingView, 'service', service_mock):
             request = self.factory.post('/api/products/1/rating/', {'value': 3}, format='json')
-            force_authenticate(request, user=user)
-            response = ProductRatingView.as_view()(request, product_id=1)
-        response.render()
+            self.authenticate(request, user)
+            response = self.dispatch(request, ProductRatingView, product_id=1)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.data['error']['code'], 'VALIDATION_ERROR')
         service_mock.set_user_rating.assert_not_called()
@@ -298,9 +289,8 @@ class CatalogViewsUnitTests(unittest.TestCase):
         user = types.SimpleNamespace(id=7, is_authenticated=True)
         with patch.object(ProductRatingView, 'service', service_mock):
             request = self.factory.post('/api/products/1/rating/', {'value': 4}, format='json')
-            force_authenticate(request, user=user)
-            response = ProductRatingView.as_view()(request, product_id=1)
-        response.render()
+            self.authenticate(request, user)
+            response = self.dispatch(request, ProductRatingView, product_id=1)
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.data['error']['code'], 'NOT_FOUND')
 
@@ -309,9 +299,8 @@ class CatalogViewsUnitTests(unittest.TestCase):
         user = types.SimpleNamespace(id=5, is_authenticated=True)
         with patch.object(ProductRatingView, 'service', service_mock):
             request = self.factory.post('/api/products/1/rating/', {'value': 'bad'}, format='json')
-            force_authenticate(request, user=user)
-            response = ProductRatingView.as_view()(request, product_id=1)
-        response.render()
+            self.authenticate(request, user)
+            response = self.dispatch(request, ProductRatingView, product_id=1)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.data['error']['code'], 'VALIDATION_ERROR')
         service_mock.set_user_rating.assert_not_called()
@@ -321,8 +310,7 @@ class CatalogViewsUnitTests(unittest.TestCase):
         service_mock.get_rating_summary.return_value = None
         request = self.factory.get('/api/products/1/rating/')
         with patch.object(ProductRatingView, 'service', service_mock):
-            response = ProductRatingView.as_view()(request, product_id=1)
-        response.render()
+            response = self.dispatch(request, ProductRatingView, product_id=1)
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.data['error']['code'], 'NOT_FOUND')
 
@@ -331,8 +319,7 @@ class CatalogViewsUnitTests(unittest.TestCase):
         service_mock.get_rating_summary.return_value = {'rating': {'rate': 5, 'count': 1}}
         request = self.factory.get('/api/products/1/rating/', HTTP_X_USER_ID='42')
         with patch.object(ProductRatingView, 'service', service_mock):
-            response = ProductRatingView.as_view()(request, product_id=1)
-        response.render()
+            response = self.dispatch(request, ProductRatingView, product_id=1)
         self.assertEqual(response.status_code, 200)
         service_mock.get_rating_summary.assert_called_once_with(1, 42)
 
@@ -342,8 +329,7 @@ class CatalogViewsUnitTests(unittest.TestCase):
         request = self.factory.post('/api/products/1/rating/?userId=55', {'value': 4}, format='json')
         with patch.object(ProductRatingView, 'service', service_mock), \
              patch.object(ProductRatingView, 'permission_classes', [AllowAny]):
-            response = ProductRatingView.as_view()(request, product_id=1)
-        response.render()
+            response = self.dispatch(request, ProductRatingView, product_id=1)
         self.assertEqual(response.status_code, 201)
         service_mock.set_user_rating.assert_called_once_with(1, 55, 4)
 
@@ -352,8 +338,7 @@ class CatalogViewsUnitTests(unittest.TestCase):
         request = self.factory.post('/api/products/1/rating/', {'value': 4}, format='json', HTTP_X_USER_ID='bad')
         with patch.object(ProductRatingView, 'service', service_mock), \
              patch.object(ProductRatingView, 'permission_classes', [AllowAny]):
-            response = ProductRatingView.as_view()(request, product_id=1)
-        response.render()
+            response = self.dispatch(request, ProductRatingView, product_id=1)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.data['error']['code'], 'VALIDATION_ERROR')
         service_mock.set_user_rating.assert_not_called()
@@ -367,16 +352,14 @@ class CatalogViewsUnitTests(unittest.TestCase):
         request_success = self.factory.delete('/api/products/1/rating/', HTTP_X_USER_ID='77')
         with patch.object(ProductRatingView, 'service', service_mock), \
              patch.object(ProductRatingView, 'permission_classes', [AllowAny]):
-            response_success = ProductRatingView.as_view()(request_success, product_id=1)
-        response_success.render()
+            response_success = self.dispatch(request_success, ProductRatingView, product_id=1)
         self.assertEqual(response_success.status_code, 200)
         self.assertEqual(response_success.data['rating']['count'], 0)
 
         request_error = self.factory.delete('/api/products/1/rating/', HTTP_X_USER_ID='77')
         with patch.object(ProductRatingView, 'service', service_mock), \
              patch.object(ProductRatingView, 'permission_classes', [AllowAny]):
-            response_error = ProductRatingView.as_view()(request_error, product_id=1)
-        response_error.render()
+            response_error = self.dispatch(request_error, ProductRatingView, product_id=1)
         self.assertEqual(response_error.status_code, 404)
         self.assertEqual(response_error.data['error']['code'], 'NOT_FOUND')
 
@@ -384,10 +367,9 @@ class CatalogViewsUnitTests(unittest.TestCase):
         service_mock = Mock()
         user = types.SimpleNamespace(id=None, is_authenticated=True)
         request = self.factory.delete('/api/products/1/rating/')
-        force_authenticate(request, user=user)
+        self.authenticate(request, user)
         with patch.object(ProductRatingView, 'service', service_mock):
-            response = ProductRatingView.as_view()(request, product_id=1)
-        response.render()
+            response = self.dispatch(request, ProductRatingView, product_id=1)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.data['error']['code'], 'VALIDATION_ERROR')
 
@@ -398,28 +380,24 @@ class CatalogViewsUnitTests(unittest.TestCase):
 
         with patch.object(ProductByCategoriesView, 'service', service_mock):
             request_missing = self.factory.get('/api/products/by-categories/')
-            response_missing = ProductByCategoriesView.as_view()(request_missing)
-        response_missing.render()
+            response_missing = self.dispatch(request_missing, ProductByCategoriesView)
         self.assertEqual(response_missing.status_code, 200)
         self.assertEqual(response_missing.data, [])
 
         with patch.object(ProductByCategoriesView, 'service', service_mock):
             request_invalid = self.factory.get('/api/products/by-categories/', {'categoryIds': 'a,b'})
-            response_invalid = ProductByCategoriesView.as_view()(request_invalid)
-        response_invalid.render()
+            response_invalid = self.dispatch(request_invalid, ProductByCategoriesView)
         self.assertEqual(response_invalid.status_code, 400)
         self.assertEqual(response_invalid.data['error']['code'], 'VALIDATION_ERROR')
 
         with patch.object(ProductByCategoriesView, 'service', service_mock):
             request_empty = self.factory.get('/api/products/by-categories/', {'categoryIds': ' , '})
-            response_empty = ProductByCategoriesView.as_view()(request_empty)
-        response_empty.render()
+            response_empty = self.dispatch(request_empty, ProductByCategoriesView)
         self.assertEqual(response_empty.status_code, 200)
         self.assertEqual(response_empty.data, [])
 
         with patch.object(ProductByCategoriesView, 'service', service_mock):
             request_valid = self.factory.get('/api/products/by-categories/', {'categoryIds': '1, 2'})
-            response_valid = ProductByCategoriesView.as_view()(request_valid)
-        response_valid.render()
+            response_valid = self.dispatch(request_valid, ProductByCategoriesView)
         self.assertEqual(response_valid.status_code, 200)
         service_mock.list_products_by_category_ids.assert_called_once_with([1, 2])

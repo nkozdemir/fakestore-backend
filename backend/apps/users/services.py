@@ -4,11 +4,6 @@ from .dtos import user_to_dto
 from .models import User
 from .dtos import address_to_dto
 
-class ServiceValidationError(Exception):
-    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
-        super().__init__(message)
-        self.details = details or {}
-
 class UserService:
     def __init__(self):
         self.users = UserRepository()
@@ -25,13 +20,6 @@ class UserService:
         # Ensure password is hashed and proper user creation is used
         password = data.pop('password', None)
         address_payload = data.pop('address', None)
-        # Uniqueness checks (defense in depth in addition to serializer validators)
-        username = data.get('username')
-        email = data.get('email')
-        if username and User.objects.filter(username=username).exists():
-            raise ServiceValidationError('Username already exists', {'field': 'username', 'value': username})
-        if email and User.objects.filter(email=email).exists():
-            raise ServiceValidationError('Email already exists', {'field': 'email', 'value': email})
         # Map optional first/last name if provided under alternative keys
         user: User = User.objects.create_user(**data)
         if password:
@@ -57,13 +45,6 @@ class UserService:
             return None
         password = data.pop('password', None)
         address_payload = data.pop('address', None)
-        # Uniqueness checks when changing username/email
-        new_username = data.get('username')
-        new_email = data.get('email')
-        if new_username and User.objects.filter(username=new_username).exclude(id=user_id).exists():
-            raise ServiceValidationError('Username already exists', {'field': 'username', 'value': new_username})
-        if new_email and User.objects.filter(email=new_email).exclude(id=user_id).exists():
-            raise ServiceValidationError('Email already exists', {'field': 'email', 'value': new_email})
         for k, v in data.items():
             setattr(user, k, v)
         if password:

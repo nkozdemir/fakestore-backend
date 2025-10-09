@@ -154,17 +154,7 @@ class ProductRatingView(APIView):
     service = ProductService()
 
     def _current_user_id(self, request):
-        # Use authenticated user if available
-        user = getattr(request, 'user', None)
-        if user and getattr(user, 'is_authenticated', False):
-            return user.id
-        # Fallbacks for tests if any
-        # Prefer camelCase userId; keep header fallback for tests
-        uid = request.headers.get('X-User-Id') or request.query_params.get('userId')
-        try:
-            return int(uid) if uid is not None else None
-        except ValueError:
-            return None
+        return getattr(request, 'rating_user_id', None)
 
     @extend_schema(
         summary="Get rating summary",
@@ -186,8 +176,6 @@ class ProductRatingView(APIView):
     )
     def post(self, request, product_id: int):
         user_id = self._current_user_id(request)
-        if not user_id:
-            return error_response('VALIDATION_ERROR', 'Authentication required', None)
         value = request.data.get('value')
         try:
             value = int(value)
@@ -206,8 +194,6 @@ class ProductRatingView(APIView):
     )
     def delete(self, request, product_id: int):
         user_id = self._current_user_id(request)
-        if not user_id:
-            return error_response('VALIDATION_ERROR', 'Authentication required', None)
         result = self.service.delete_user_rating(product_id, user_id)
         if isinstance(result, tuple):
             code, msg, details = result
@@ -224,14 +210,7 @@ class ProductByCategoriesView(APIView):
         responses={200: ProductReadSerializer(many=True), 400: OpenApiResponse(response=ErrorResponseSerializer)},
     )
     def get(self, request):
-        raw = request.query_params.get('categoryIds')
-        if not raw:
-            # Return empty list if not provided (could alternatively error)
-            return Response([])
-        try:
-            ids = [int(x) for x in raw.split(',') if x.strip()]
-        except ValueError:
-            return error_response('VALIDATION_ERROR', 'Invalid categoryIds parameter', {'categoryIds': raw})
+        ids = getattr(request, 'category_ids', [])
         if not ids:
             return Response([])
         data = self.service.list_products_by_category_ids(ids)

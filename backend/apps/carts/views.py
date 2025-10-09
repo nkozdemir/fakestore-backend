@@ -51,9 +51,8 @@ class CartListView(APIView):
     def post(self, request):
         serializer = CartCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        # Infer user from JWT-authenticated request and inject into payload
-        user_id = getattr(request.user, 'id', None)
-        if not user_id:
+        user_id = getattr(request, 'validated_user_id', None)
+        if user_id is None:
             return error_response('UNAUTHORIZED', 'Authentication required')
         payload = dict(serializer.validated_data)
         payload['userId'] = int(user_id)
@@ -90,8 +89,8 @@ class CartDetailView(APIView):
         },
     )
     def put(self, request, cart_id: int):
-        user_id = getattr(request.user, 'id', None)
-        if not user_id:
+        user_id = getattr(request, 'validated_user_id', None)
+        if user_id is None:
             return error_response('UNAUTHORIZED', 'Authentication required')
         serializer = CartWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -114,8 +113,8 @@ class CartDetailView(APIView):
         },
     )
     def patch(self, request, cart_id: int):
-        user_id = getattr(request.user, 'id', None)
-        if not user_id:
+        user_id = getattr(request, 'validated_user_id', None)
+        if user_id is None:
             return error_response('UNAUTHORIZED', 'Authentication required')
         # Interpret patch operations for cart items
         ops_serializer = CartPatchSerializer(data=request.data)
@@ -138,8 +137,8 @@ class CartDetailView(APIView):
         },
     )
     def delete(self, request, cart_id: int):
-        user_id = getattr(request.user, 'id', None)
-        if not user_id:
+        user_id = getattr(request, 'validated_user_id', None)
+        if user_id is None:
             return error_response('UNAUTHORIZED', 'Authentication required')
         deleted = self.service.delete_cart(cart_id, user_id=user_id)
         if not deleted:

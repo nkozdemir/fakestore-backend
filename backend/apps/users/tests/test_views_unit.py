@@ -1,7 +1,8 @@
 import unittest
 from unittest.mock import patch
 from rest_framework import status
-from apps.users.services import ServiceValidationError
+from rest_framework.exceptions import ValidationError as DRFValidationError
+from django.db import IntegrityError
 from apps.users.views import (
     UserListView,
     UserDetailView,
@@ -34,7 +35,9 @@ class FakeUserSerializer:
         else:
             self.validated_data = data
 
-    def is_valid(self):
+    def is_valid(self, raise_exception=False):
+        if not self._is_valid and raise_exception:
+            raise DRFValidationError(self.errors)
         return self._is_valid
 
     @property
@@ -54,7 +57,9 @@ class FakeAddressWriteSerializer:
             self._is_valid = True
         self.validated_data = {k: v for k, v in self._data.items() if not k.startswith('__')}
 
-    def is_valid(self):
+    def is_valid(self, raise_exception=False):
+        if not self._is_valid and raise_exception:
+            raise DRFValidationError(self.errors)
         return self._is_valid
 
 
@@ -166,7 +171,7 @@ class UserViewsUnitTests(unittest.TestCase):
     def test_user_list_post_service_validation_error(self):
         view = UserListView()
         view.service = self.service
-        self.service.create_result = ServiceValidationError('bad input', {'field': 'username'})
+        self.service.create_result = IntegrityError('duplicate')
         request = DummyRequest({'username': 'duplicate'})
         response = view.post(request)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -221,7 +226,8 @@ class UserViewsUnitTests(unittest.TestCase):
         view = UserAddressListView()
         view.service = self.service
         self.service.address_create_result = {'id': 1, 'street': 'Main'}
-        request = DummyRequest({'street': 'Main'}, user=type('U', (), {'id': 5})())
+        request = DummyRequest({'street': 'Main'}, user=type('U', (), {'id': 5, 'is_authenticated': True})())
+        request.validated_user_id = 5
         response = view.post(request)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(self.service.last_address_create[0], 5)
@@ -234,9 +240,13 @@ class UserViewsUnitTests(unittest.TestCase):
 
         user = type('U', (), {'id': 7})()
         self.service.address_get_result = None
-        response_missing = view.get(DummyRequest(user=user), address_id=1)
+        req_missing = DummyRequest(user=user)
+        req_missing.validated_user_id = user.id
+        response_missing = view.get(req_missing, address_id=1)
         self.assertEqual(response_missing.status_code, status.HTTP_404_NOT_FOUND)
 
         self.service.address_delete_result = True
-        delete_resp = view.delete(DummyRequest(user=user), address_id=1)
+        req_delete = DummyRequest(user=user)
+        req_delete.validated_user_id = user.id
+        delete_resp = view.delete(req_delete, address_id=1)
         self.assertEqual(delete_resp.status_code, status.HTTP_204_NO_CONTENT)

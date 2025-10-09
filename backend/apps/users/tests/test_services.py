@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import patch
-from apps.users.services import UserService, ServiceValidationError
+from apps.users.services import UserService
 
 
 class FakeAddress:
@@ -202,26 +202,6 @@ class UserServiceUnitTests(unittest.TestCase):
         self.assertEqual(dto['addresses'], [1])
         stored_user = self.user_repo.get(id=dto['id'])
         self.assertEqual(stored_user.password, 'hashed:Secret123')
-
-    def test_create_user_rejects_duplicate_username(self):
-        self.user_manager.create_user(username='existing', email='existing@example.com')
-        with self.assertRaises(ServiceValidationError):
-            self.service.create_user({
-                'username': 'existing',
-                'email': 'new@example.com',
-                'firstname': 'A',
-                'lastname': 'B',
-                'phone': '',
-                'password': 'Secret123',
-            })
-
-    def test_update_user_rejects_duplicate_email(self):
-        existing = self.user_manager.create_user(username='existing', email='existing@example.com')
-        target = self.user_manager.create_user(username='target', email='target@example.com')
-        self.user_repo.add(existing)
-        self.user_repo.add(target)
-        with self.assertRaises(ServiceValidationError):
-            self.service.update_user(target.id, {'email': 'existing@example.com'})
 
     def test_update_user_returns_none_for_missing_user(self):
         result = self.service.update_user(99, {'username': 'ghost'})
