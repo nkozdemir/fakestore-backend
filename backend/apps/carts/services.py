@@ -12,14 +12,16 @@ class CartService:
         self.carts = CartRepository()
         self.cart_products = CartProductRepository()
         self.products = ProductRepository()
+        self.cart_product_mapper = CartProductMapper()
+        self.cart_mapper = CartMapper(self.cart_product_mapper)
 
     def list_carts(self, user_id: Optional[int] = None):
         qs = self.carts.list(user_id=user_id) if user_id else self.carts.list()
-        return CartMapper.many_to_dto(qs)
+        return self.cart_mapper.many_to_dto(qs)
 
     def get_cart(self, cart_id: int):
         c = self.carts.get(id=cart_id)
-        return CartMapper.to_dto(c) if c else None
+        return self.cart_mapper.to_dto(c) if c else None
 
     def create_cart(self, data: Dict[str, Any]):
         # Accept raw dict or already-built command
@@ -36,7 +38,7 @@ class CartService:
                 if not product:
                     continue
                 self.cart_products.create(cart=cart, product=product, quantity=item.quantity)
-        return CartMapper.to_dto(cart)
+        return self.cart_mapper.to_dto(cart)
 
     def update_cart(self, cart_id: int, data: Dict[str, Any], user_id: Optional[int] = None):
         filters: Dict[str, Any] = {'id': cart_id}
@@ -52,7 +54,7 @@ class CartService:
             if cmd.items is not None:
                 self._rebuild_items(cart, [ {'productId': i.product_id, 'quantity': i.quantity } for i in cmd.items ])
         refreshed = self.carts.get(id=cart_id)
-        return CartMapper.to_dto(refreshed)
+        return self.cart_mapper.to_dto(refreshed)
 
     def delete_cart(self, cart_id: int, user_id: Optional[int] = None) -> bool:
         """Hard-delete a cart in an explicit order: first its products, then the cart.
@@ -102,7 +104,7 @@ class CartService:
             self._apply_update_ops(cart, cmd.update)
             self._apply_remove_ops(cart, cmd.remove)
         cart_refreshed = self.carts.get(id=cart_id)
-        return CartMapper.to_dto(cart_refreshed)
+        return self.cart_mapper.to_dto(cart_refreshed)
 
     # Helper methods
     def _rebuild_items(self, cart: Cart, raw_items: List[Dict[str, Any]]):

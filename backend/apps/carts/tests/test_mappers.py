@@ -12,21 +12,23 @@ class CartMapperTests(TestCase):
         self.user = User.objects.create_user(username="u_mapper", password="x", email="u_mapper@example.com", firstname="First", lastname="Last")
         self.cart = Cart.objects.create(user=self.user, date="2025-09-29")
         CartProduct.objects.create(cart=self.cart, product=self.product, quantity=3)
+        self.cart_product_mapper = CartProductMapper()
+        self.cart_mapper = CartMapper(self.cart_product_mapper)
 
     def test_cart_product_mapper(self):
         cp = self.cart.cart_products.first()
-        dto = CartProductMapper.to_dto(cp)
+        dto = self.cart_product_mapper.to_dto(cp)
         self.assertEqual(dto.product.id, self.product.id)
         self.assertEqual(dto.quantity, 3)
 
     def test_cart_mapper(self):
-        dto = CartMapper.to_dto(self.cart)
+        dto = self.cart_mapper.to_dto(self.cart)
         self.assertEqual(dto.id, self.cart.id)
         self.assertEqual(dto.user_id, self.cart.user_id)
         self.assertEqual(len(dto.items), 1)
         self.assertEqual(dto.items[0].quantity, 3)
 
     def test_many_mapper(self):
-        dtos = CartMapper.many_to_dto([self.cart])
+        dtos = self.cart_mapper.many_to_dto([self.cart])
         self.assertEqual(len(dtos), 1)
         self.assertEqual(dtos[0].id, self.cart.id)
