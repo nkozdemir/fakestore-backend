@@ -1,0 +1,58 @@
+x-backend-build: &backend_build
+  context: ${DOCKER_BUILD_CONTEXT:-.}
+  dockerfile: ${DOCKERFILE_PATH:-Dockerfile.prod}
+  args:
+    BACKEND_SOURCE_ROOT: ${BACKEND_SOURCE_ROOT:-.}
+    BACKEND_APP_PATH: ${BACKEND_APP_PATH:-backend}
+    BACKEND_REQUIREMENTS_PATH: ${BACKEND_REQUIREMENTS_PATH:-requirements.txt}
+    DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-fakestore.settings}
+
+services:
+  db:
+    image: postgres:16
+    env_file:
+      - ${ENV_FILE_PROD:-./.env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --save 60 1 --loglevel warning
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  web:
+    build: *backend_build
+    env_file:
+      - ${ENV_FILE_PROD:-./.env}
+    environment:
+      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-fakestore.settings}
+      DJANGO_APP_DIR: ${DJANGO_APP_DIR:-backend}
+      DJANGO_WSGI_MODULE: ${DJANGO_WSGI_MODULE:-fakestore.wsgi:application}
+      GUNICORN_BIND: ${GUNICORN_BIND:-0.0.0.0:8000}
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-2}
+      GUNICORN_THREADS: ${GUNICORN_THREADS:-2}
+      GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-30}
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/1}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    command: >
+      sh -c "exec gunicorn $${DJANGO_WSGI_MODULE} --chdir $${DJANGO_APP_DIR} --bind $${GUNICORN_BIND} \
+             --workers $${GUNICORN_WORKERS} --threads $${GUNICORN_THREADS} --timeout $${GUNICORN_TIMEOUT}"
+
+volumes:
+  pgdata:

@@ -166,6 +166,23 @@ Examples:
 - Add pagination by integrating DRF pagination in settings and adjusting views.
 - Replace manual DTO serializers with DRF ModelSerializers if you later loosen layering constraints.
 
+## Docker
+- Duplicate `.env.example` to `.env` and adjust secrets, hostnames, and credentials as needed. The compose stack reads from `.env` by default.
+- Build and start the production-oriented stack:
+  ```bash
+  docker compose --env-file .env -f docker-compose.prod.yml up -d --build
+  ```
+- Run migrations once the services are healthy:
+  ```bash
+  docker compose --env-file .env -f docker-compose.prod.yml exec web python backend/manage.py migrate
+  ```
+- Tail logs or enter the web container shell when troubleshooting:
+  ```bash
+  docker compose --env-file .env -f docker-compose.prod.yml logs -f web
+  docker compose --env-file .env -f docker-compose.prod.yml exec web /bin/sh
+  ```
+- `Makefile` shortcuts wrap the same commands (for example `make prod-bootstrap` runs build → up → migrate → seed).
+
 ## Testing
 
 Unit tests are provided for all main API areas and run against SQLite automatically (tests switch DB in settings when `test` is in `sys.argv`). Tests now live under per-app `tests/` packages for consistent discovery.
