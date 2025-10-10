@@ -1,13 +1,15 @@
+from __future__ import annotations
+
 from typing import Dict, Any, Optional
-from .repositories import UserRepository, AddressRepository
-from .dtos import user_to_dto
+
+from .dtos import address_to_dto, user_to_dto
 from .models import User
-from .dtos import address_to_dto
+from .protocols import AddressRepositoryProtocol, UserRepositoryProtocol
 
 class UserService:
-    def __init__(self):
-        self.users = UserRepository()
-        self.addresses = AddressRepository()
+    def __init__(self, users: UserRepositoryProtocol, addresses: AddressRepositoryProtocol):
+        self.users = users
+        self.addresses = addresses
 
     def list_users(self):
         return [user_to_dto(u) for u in self.users.list()]
@@ -17,11 +19,9 @@ class UserService:
         return user_to_dto(u) if u else None
 
     def create_user(self, data: Dict[str, Any]):
-        # Ensure password is hashed and proper user creation is used
         password = data.pop('password', None)
         address_payload = data.pop('address', None)
-        # Map optional first/last name if provided under alternative keys
-        user: User = User.objects.create_user(**data)
+        user: User = self.users.create_user(**data)
         if password:
             user.set_password(password)
             user.save(update_fields=['password'])

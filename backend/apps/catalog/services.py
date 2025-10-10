@@ -1,21 +1,28 @@
+from __future__ import annotations
+
 from typing import Optional, Dict, Any, Union
-from django.core.cache import cache
-from .repositories import ProductRepository, CategoryRepository, RatingRepository
+
 from .mappers import ProductMapper, CategoryMapper
 from .models import Product, Category, Rating
 from .commands import ProductCreateCommand, ProductUpdateCommand, RatingSetCommand
+from .protocols import (
+    CacheBackendProtocol,
+    CategoryRepositoryProtocol,
+    ProductRepositoryProtocol,
+    RatingRepositoryProtocol,
+)
 
 class ProductService:
     def __init__(
         self,
-        products: Optional[ProductRepository] = None,
-        ratings: Optional[RatingRepository] = None,
-        cache_backend=None,
+        products: ProductRepositoryProtocol,
+        ratings: RatingRepositoryProtocol,
+        cache_backend: CacheBackendProtocol,
         disable_cache: bool = False,
     ):
-        self.products = products or ProductRepository()
-        self.ratings = ratings or RatingRepository()
-        self.cache = cache_backend or cache
+        self.products = products
+        self.ratings = ratings
+        self.cache = cache_backend
         self.disable_cache = disable_cache
         # Caching keys
         self._cache_prefix = 'products:list'
@@ -153,8 +160,8 @@ class ProductService:
         return self.get_rating_summary(product_id, user_id)
 
 class CategoryService:
-    def __init__(self, categories: Optional[CategoryRepository] = None):
-        self.categories = categories or CategoryRepository()
+    def __init__(self, categories: CategoryRepositoryProtocol):
+        self.categories = categories
 
     def list_categories(self):
         return CategoryMapper.many_to_dto(self.categories.list())

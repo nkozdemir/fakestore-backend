@@ -1,47 +1,52 @@
-from typing import Optional, Dict, Any, List
+from __future__ import annotations
+
+from typing import Any, Dict, List, Optional
+
 from django.db import transaction
-from .repositories import CartRepository, CartProductRepository
-from .mappers import CartMapper, CartProductMapper
+
+from .commands import CartCreateCommand, CartItemCommand, CartPatchCommand, CartUpdateCommand
 from .models import Cart, CartProduct
-from .commands import CartCreateCommand, CartPatchCommand, CartItemCommand, CartUpdateCommand
-from apps.catalog.repositories import ProductRepository
-from django.utils import timezone
+from .protocols import (
+    CartMapperProtocol,
+    CartProductRepositoryProtocol,
+    CartRepositoryProtocol,
+    ProductRepositoryProtocol,
+)
+
 
 class CartService:
     def __init__(
         self,
-        carts: Optional[CartRepository] = None,
-        cart_products: Optional[CartProductRepository] = None,
-        products: Optional[ProductRepository] = None,
-        cart_product_mapper: Optional[CartProductMapper] = None,
-        cart_mapper: Optional[CartMapper] = None,
+        carts: CartRepositoryProtocol,
+        cart_products: CartProductRepositoryProtocol,
+        products: ProductRepositoryProtocol,
+        cart_mapper: CartMapperProtocol,
     ):
-        self.carts = carts or CartRepository()
-        self.cart_products = cart_products or CartProductRepository()
-        self.products = products or ProductRepository()
-        self.cart_product_mapper = cart_product_mapper or CartProductMapper()
-        self.cart_mapper = cart_mapper or CartMapper(self.cart_product_mapper)
+        self.carts = carts
+        self.cart_products = cart_products
+        self.products = products
+        self.cart_mapper = cart_mapper
 
     def list_carts(self, user_id: Optional[int] = None):
         qs = self.carts.list(user_id=user_id) if user_id else self.carts.list()
         return self.cart_mapper.many_to_dto(qs)
 
     def get_cart(self, cart_id: int):
-        c = self.carts.get(id=cart_id)
-        return self.cart_mapper.to_dto(c) if c else None
+        cart = self.carts.get(id=cart_id)
+        return self.cart_mapper.to_dto(cart) if cart else None
 
     def create_cart(self, user_id: int, data: Dict[str, Any]):
         payload = dict(data)
         payload['userId'] = user_id
-        cmd = payload if isinstance(payload, CartCreateCommand) else CartCreateCommand.from_raw(payload)
+        command = payload if isinstance(payload, CartCreateCommand) else CartCreateCommand.from_raw(payload)
         create_kwargs: Dict[str, Any] = {
-            'date': cmd.date,
+            'date': command.date,
         }
-        if cmd.user_id is not None:
-            create_kwargs['user_id'] = cmd.user_id
+        if command.user_id is not None:
+            create_kwargs['user_id'] = command.user_id
         with transaction.atomic():
             cart: Cart = self.carts.create(**create_kwargs)
-            for item in cmd.items:
+            for item in command.items:
                 product = self.products.get(id=item.product_id)
                 if not product:
                     continue
@@ -55,20 +60,17 @@ class CartService:
         cart: Optional[Cart] = self.carts.get(**filters)
         if not cart:
             return None
-        cmd = CartUpdateCommand.from_raw(cart_id, data)
+        command = CartUpdateCommand.from_raw(cart_id, data)
         with transaction.atomic():
-            # scalar updates
-            self.carts.update_scalar(cart, user_id=cmd.user_id, date=cmd.date)
-            if cmd.items is not None:
-                self._rebuild_items(cart, [ {'productId': i.product_id, 'quantity': i.quantity } for i in cmd.items ])
+            self.carts.update_scalar(cart, user_id=command.user_id, date=command.date)
+            if command.items is not None:
+                raw_items = [{'productId': item.product_id, 'quantity': item.quantity} for item in command.items]
+                self._rebuild_items(cart, raw_items)
         refreshed = self.carts.get(id=cart_id)
-        return self.cart_mapper.to_dto(refreshed)
+        return self.cart_mapper.to_dto(refreshed) if refreshed else None
 
     def delete_cart(self, cart_id: int, user_id: Optional[int] = None) -> bool:
-        """Hard-delete a cart in an explicit order: first its products, then the cart.
-        If user_id is provided, the operation is scoped to the owner's cart.
-        Returns True iff the cart row was deleted.
-        """
+        """Remove a cart and its line items. Respects user scoping when provided."""
         filters: Dict[str, Any] = {'id': cart_id}
         if user_id is not None:
             filters['user_id'] = user_id
@@ -76,55 +78,39 @@ class CartService:
         if not cart:
             return False
         with transaction.atomic():
-            # delete line items then cart
-            for cp in self.cart_products.list_for_cart(cart.id):
-                self.cart_products.delete(cp)
+            for cart_product in self.cart_products.list_for_cart(cart.id):
+                self.cart_products.delete(cart_product)
             self.carts.delete(cart)
         return True
 
     def patch_operations(self, cart_id: int, ops: Dict[str, Any], user_id: Optional[int] = None):
-        """Apply add/update/remove operations on cart line items.
-        ops format:
-        {
-          'add': [{'productId': int, 'quantity': int}],
-          'update': [{'productId': int, 'quantity': int}],
-          'remove': [productId, ...],
-          'date': iso-date-string (optional),
-          'userId': int (optional)
-        }
-        Order: add -> update -> remove
-        add: increment quantity (create if missing)
-        update: set quantity exactly (create if missing)
-        remove: delete line items
-        """
+        """Apply add/update/remove operations to cart contents in a single transaction."""
         filters: Dict[str, Any] = {'id': cart_id}
         if user_id is not None:
             filters['user_id'] = user_id
         cart: Optional[Cart] = self.carts.get(**filters)
         if not cart:
             return None
-        cmd = CartPatchCommand.from_raw(cart_id, ops)
-
+        command = CartPatchCommand.from_raw(cart_id, ops)
         with transaction.atomic():
-            self._update_cart_metadata(cart, cmd.new_date, cmd.new_user_id)
+            self._update_cart_metadata(cart, command.new_date, command.new_user_id)
             existing_map = {cp.product_id: cp for cp in self.cart_products.list_for_cart(cart.id)}
-            self._apply_add_ops(cart, existing_map, cmd.add)
-            self._apply_update_ops(cart, cmd.update)
-            self._apply_remove_ops(cart, cmd.remove)
-        cart_refreshed = self.carts.get(id=cart_id)
-        return self.cart_mapper.to_dto(cart_refreshed)
+            self._apply_add_ops(cart, existing_map, command.add)
+            self._apply_update_ops(cart, command.update)
+            self._apply_remove_ops(cart, command.remove)
+        refreshed = self.carts.get(id=cart_id)
+        return self.cart_mapper.to_dto(refreshed) if refreshed else None
 
-    # Helper methods
     def _rebuild_items(self, cart: Cart, raw_items: List[Dict[str, Any]]):
         self.cart_products.delete_for_cart(cart)
         for raw in raw_items:
-            cmd = CartItemCommand.from_raw(raw)
-            if not cmd:
+            command = CartItemCommand.from_raw(raw)
+            if not command:
                 continue
-            product = self.products.get(id=cmd.product_id)
+            product = self.products.get(id=command.product_id)
             if not product:
                 continue
-            self.cart_products.create(cart=cart, product=product, quantity=cmd.quantity)
+            self.cart_products.create(cart=cart, product=product, quantity=command.quantity)
 
     def _update_cart_metadata(self, cart: Cart, new_date, new_user_id):
         changed = False
@@ -145,26 +131,26 @@ class CartService:
             product = self.products.get(id=item.product_id)
             if not product:
                 continue
-            cp = existing_map.get(item.product_id)
-            if cp:
-                cp.quantity += item.quantity
-                cp.save()
+            current = existing_map.get(item.product_id)
+            if current:
+                current.quantity += item.quantity
+                current.save()
             else:
-                cp = self.cart_products.create(cart=cart, product=product, quantity=item.quantity)
-                existing_map[item.product_id] = cp
+                created = self.cart_products.create(cart=cart, product=product, quantity=item.quantity)
+                existing_map[item.product_id] = created
 
     def _apply_update_ops(self, cart: Cart, update_ops: List[CartItemCommand]):
         for item in update_ops:
             product = self.products.get(id=item.product_id)
             if not product:
                 continue
-            cp = self.cart_products.get_for_cart_product(cart.id, item.product_id)
-            if not cp:
+            current = self.cart_products.get_for_cart_product(cart.id, item.product_id)
+            if not current:
                 self.cart_products.create(cart=cart, product=product, quantity=item.quantity)
             else:
-                cp.quantity = item.quantity
-                cp.save()
+                current.quantity = item.quantity
+                current.save()
 
     def _apply_remove_ops(self, cart: Cart, remove_ops: List[int]):
-        for pid in remove_ops:
-            self.cart_products.delete_product(cart, pid)
+        for product_id in remove_ops:
+            self.cart_products.delete_product(cart, product_id)

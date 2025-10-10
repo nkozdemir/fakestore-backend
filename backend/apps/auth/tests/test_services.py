@@ -1,41 +1,62 @@
 import unittest
-from unittest.mock import Mock, patch
+
 from apps.auth.services import RegistrationService
+
+
+class FakeUser:
+    def __init__(self, **attrs):
+        self.__dict__.update(attrs)
+
+
+class FakeUserRepository:
+    def __init__(self):
+        self._existing_usernames = set()
+        self._existing_emails = set()
+        self._created_payloads = []
+        self._supports_fields = {'firstname', 'lastname'}
+
+    def username_exists(self, username: str) -> bool:
+        return username in self._existing_usernames
+
+    def email_exists(self, email: str) -> bool:
+        return email in self._existing_emails
+
+    def supports_field(self, field_name: str) -> bool:
+        return field_name in self._supports_fields
+
+    def create_user(self, **data):
+        payload = dict(data)
+        payload.setdefault('id', len(self._created_payloads) + 1)
+        user = FakeUser(**payload)
+        self._created_payloads.append(payload)
+        self._existing_usernames.add(user.username)
+        self._existing_emails.add(user.email)
+        return user
 
 
 class RegistrationServiceTests(unittest.TestCase):
     def setUp(self):
-        user_model = Mock()
-        self.user_model_patch = patch('apps.auth.services.get_user_model', return_value=user_model)
-        self.user_model_patch.start()
-        self.user_model = user_model
-        self.service = RegistrationService()
-
-    def tearDown(self):
-        self.user_model_patch.stop()
+        self.repo = FakeUserRepository()
+        self.service = RegistrationService(users=self.repo)
 
     def test_register_success(self):
-        self.user_model.objects.filter.return_value.exists.return_value = False
-        created = Mock(id=1, username='user', email='user@example.com')
-        self.user_model.objects.create.return_value = created
         result = self.service.register({
             'username': 'user',
             'email': 'user@example.com',
-            'password': 'x',
-            'first_name': 'A',
-            'last_name': 'B',
+            'password': 'Secret123',
+            'first_name': 'Alice',
+            'last_name': 'Example',
         })
         self.assertEqual(result['username'], 'user')
         self.assertEqual(result['email'], 'user@example.com')
+        self.assertEqual(result['id'], 1)
 
     def test_register_duplicate_username(self):
-        qs = Mock()
-        qs.exists.return_value = True
-        self.user_model.objects.filter.return_value = qs
+        self.repo._existing_usernames.add('dup')
         result = self.service.register({
             'username': 'dup',
             'email': 'dup@example.com',
-            'password': 'x',
+            'password': 'Secret123',
             'first_name': 'A',
             'last_name': 'B',
         })

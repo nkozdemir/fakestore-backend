@@ -1,0 +1,17 @@
+from __future__ import annotations
+
+from typing import Any, Protocol
+
+
+class UserRegistrationRepositoryProtocol(Protocol):
+    def username_exists(self, username: str) -> bool:
+        ...
+
+    def email_exists(self, email: str) -> bool:
+        ...
+
+    def supports_field(self, field_name: str) -> bool:
+        ...
+
+    def create_user(self, **data: Any):
+        ...

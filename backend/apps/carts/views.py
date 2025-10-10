@@ -1,7 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .services import CartService
+from .container import build_cart_service
 from .serializers import CartReadSerializer, CartWriteSerializer, CartCreateSerializer
 from apps.api.utils import error_response
 from rest_framework import serializers
@@ -19,7 +19,7 @@ class CartPatchSerializer(serializers.Serializer):
 @extend_schema(tags=["Carts"])
 class CartListView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
-    service = CartService()
+    service = build_cart_service()
     @extend_schema(
         summary="List carts",
         parameters=[
@@ -60,7 +60,7 @@ class CartListView(APIView):
 @extend_schema(tags=["Carts"])
 class CartDetailView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
-    service = CartService()
+    service = build_cart_service()
     @extend_schema(
         summary="Get cart",
         parameters=[OpenApiParameter("cart_id", int, OpenApiParameter.PATH)],
@@ -147,7 +147,7 @@ class CartDetailView(APIView):
 @extend_schema(tags=["Carts"])
 class CartByUserView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
-    service = CartService()
+    service = build_cart_service()
 
     @extend_schema(
         summary="List carts by user",

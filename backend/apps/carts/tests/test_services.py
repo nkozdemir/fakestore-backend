@@ -1,6 +1,9 @@
 import unittest
 from unittest.mock import patch
+
 from apps.carts.services import CartService
+from apps.carts.mappers import CartMapper, CartProductMapper
+from apps.catalog.mappers import ProductMapper
 
 
 class DummyAtomic:
@@ -159,12 +162,14 @@ class CartServiceUnitTests(unittest.TestCase):
         ])
         self.cart_repo = FakeCartRepository()
         self.cart_products_repo = FakeCartProductRepository(self.cart_repo)
+        self.cart_mapper = CartMapper(CartProductMapper(ProductMapper()))
         self.atomic_patcher = patch('apps.carts.services.transaction.atomic', DummyAtomic())
         self.atomic_patcher.start()
         self.service = CartService(
             carts=self.cart_repo,
             cart_products=self.cart_products_repo,
             products=self.products_repo,
+            cart_mapper=self.cart_mapper,
         )
 
     def tearDown(self):

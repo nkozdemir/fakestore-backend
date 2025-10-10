@@ -1,6 +1,6 @@
 import types
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from rest_framework import status
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from apps.auth.views import RegisterView, MeView, LogoutView, LogoutAllView
@@ -74,9 +74,8 @@ class AuthViewsUnitTests(unittest.TestCase):
     def tearDown(self):
         self.user_patch.stop()
 
-    @patch('apps.auth.views.RegistrationService')
-    def test_register_success(self, service_cls):
-        service = service_cls.return_value
+    def test_register_success(self):
+        service = Mock()
         service.register.return_value = {'id': 1, 'username': 'newuser', 'email': 'new@example.com'}
         request = DummyRequest({
             'username': 'newuser',
@@ -93,9 +92,8 @@ class AuthViewsUnitTests(unittest.TestCase):
         self.assertEqual(response.data['username'], 'newuser')
         self.assertEqual(response.data['email'], 'new@example.com')
 
-    @patch('apps.auth.views.RegistrationService')
-    def test_register_detects_duplicates_and_missing_fields(self, service_cls):
-        service = service_cls.return_value
+    def test_register_detects_duplicates_and_missing_fields(self):
+        service = Mock()
         service.register.return_value = ('VALIDATION_ERROR', 'Username already exists', {'username': 'taken'})
         duplicate = DummyRequest({
             'username': 'taken',

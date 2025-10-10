@@ -1,11 +1,15 @@
+from __future__ import annotations
+
 from typing import Dict, Any, Optional
-from django.contrib.auth import get_user_model
+
 from django.contrib.auth.hashers import make_password
+
+from .protocols import UserRegistrationRepositoryProtocol
 
 
 class RegistrationService:
-    def __init__(self):
-        self.user_model = get_user_model()
+    def __init__(self, users: UserRegistrationRepositoryProtocol):
+        self.users = users
 
     def _build_payload(self, data: Dict[str, Any]) -> Dict[str, Any]:
         payload = {
@@ -18,16 +22,16 @@ class RegistrationService:
             'last_name': data.get('last_name', ''),
         }
         payload.update(optional)
-        if hasattr(self.user_model, 'firstname'):
+        if self.users.supports_field('firstname'):
             payload['firstname'] = optional['first_name']
-        if hasattr(self.user_model, 'lastname'):
+        if self.users.supports_field('lastname'):
             payload['lastname'] = optional['last_name']
         return payload
 
     def _check_uniqueness(self, username: str, email: str) -> Optional[tuple]:
-        if self.user_model.objects.filter(username=username).exists():
+        if self.users.username_exists(username):
             return ('VALIDATION_ERROR', 'Username already exists', {'username': username})
-        if self.user_model.objects.filter(email=email).exists():
+        if self.users.email_exists(email):
             return ('VALIDATION_ERROR', 'Email already exists', {'email': email})
         return None
 
@@ -39,7 +43,7 @@ class RegistrationService:
             return conflict
         payload = self._build_payload(data)
         password = payload.pop('password')
-        user = self.user_model.objects.create(password=password, **payload)
+        user = self.users.create_user(password=password, **payload)
         return {
             'id': user.id,
             'username': user.username,

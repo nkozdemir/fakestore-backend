@@ -15,14 +15,14 @@ from .serializers import (
     LogoutRequestSerializer,
     DetailResponseSerializer,
 )
-from .services import RegistrationService
+from .container import build_registration_service
 
 User = get_user_model()
 
 @extend_schema(tags=["Auth"])
 class RegisterView(APIView):
     permission_classes = [AllowAny]
-    service = RegistrationService()
+    service = build_registration_service()
     @extend_schema(
         summary="Register user",
         request=RegisterRequestSerializer,

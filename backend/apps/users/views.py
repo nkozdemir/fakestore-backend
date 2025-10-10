@@ -1,7 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .services import UserService
+from .container import build_user_service
 from .serializers import UserSerializer, AddressWriteSerializer, AddressSerializer
 from apps.api.utils import error_response
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -14,7 +14,7 @@ from apps.api.schemas import ErrorResponseSerializer
 @extend_schema(tags=["Users"])
 class UserListView(APIView):
     permission_classes = [AllowAny]
-    service = UserService()
+    service = build_user_service()
     @extend_schema(
         summary="List users",
         responses={200: UserSerializer(many=True)},
@@ -45,7 +45,7 @@ class UserListView(APIView):
 @extend_schema(tags=["Users"])
 class UserDetailView(APIView):
     permission_classes = [AllowAny]
-    service = UserService()
+    service = build_user_service()
     @extend_schema(
         summary="Get user by ID",
         parameters=[OpenApiParameter("user_id", int, OpenApiParameter.PATH)],
@@ -110,7 +110,7 @@ class UserDetailView(APIView):
 class UserAddressListView(APIView):
     # Auth required; user inferred from JWT
     permission_classes = [IsAuthenticated]
-    service = UserService()
+    service = build_user_service()
     @extend_schema(
         summary="List addresses for current user",
         description="Lists addresses for the authenticated user (derived from JWT).",
@@ -144,7 +144,7 @@ class UserAddressListView(APIView):
 @extend_schema(tags=["Users", "Addresses"])
 class UserAddressDetailView(APIView):
     permission_classes = [IsAuthenticated]
-    service = UserService()
+    service = build_user_service()
     @extend_schema(
         summary="Get address for current user",
         parameters=[OpenApiParameter("address_id", int, OpenApiParameter.PATH)],

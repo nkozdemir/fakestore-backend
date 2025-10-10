@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly
-from .services import ProductService, CategoryService
+from .container import build_product_service, build_category_service
 from .serializers import ProductReadSerializer, ProductWriteSerializer, CategorySerializer
 from apps.api.utils import error_response
 from .pagination import ProductListPagination
@@ -13,7 +13,7 @@ from apps.api.schemas import paginated_response, ErrorResponseSerializer
 @extend_schema(tags=["Catalog"])
 class ProductListView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
-    service = ProductService()
+    service = build_product_service()
     @extend_schema(
         operation_id="products_list",
         summary="List products",
@@ -46,7 +46,7 @@ class ProductListView(APIView):
 @extend_schema(tags=["Catalog"])
 class ProductDetailView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
-    service = ProductService()
+    service = build_product_service()
     @extend_schema(
         operation_id="products_retrieve",
         summary="Get product",
@@ -99,7 +99,7 @@ class ProductDetailView(APIView):
 @extend_schema(tags=["Catalog"])
 class CategoryListView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
-    service = CategoryService()
+    service = build_category_service()
     @extend_schema(summary="List categories", responses={200: CategorySerializer(many=True)})
     def get(self, request):
         data = self.service.list_categories()
@@ -114,7 +114,7 @@ class CategoryListView(APIView):
 @extend_schema(tags=["Catalog"])
 class CategoryDetailView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
-    service = CategoryService()
+    service = build_category_service()
 
     @extend_schema(summary="Get category", parameters=[OpenApiParameter("category_id", int, OpenApiParameter.PATH)], responses={200: CategorySerializer, 404: OpenApiResponse(response=ErrorResponseSerializer)})
     def get(self, request, category_id: int):
@@ -151,7 +151,7 @@ class CategoryDetailView(APIView):
 @extend_schema(tags=["Catalog", "Ratings"])
 class ProductRatingView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
-    service = ProductService()
+    service = build_product_service()
 
     def _current_user_id(self, request):
         return getattr(request, 'rating_user_id', None)
@@ -203,7 +203,7 @@ class ProductRatingView(APIView):
 @extend_schema(tags=["Catalog"])
 class ProductByCategoriesView(APIView):
     permission_classes = [AllowAny]
-    service = ProductService()
+    service = build_product_service()
     @extend_schema(
         summary="List products by categories",
         parameters=[OpenApiParameter(name="categoryIds", description="Comma-separated category IDs (camelCase)", required=True, type=str)],

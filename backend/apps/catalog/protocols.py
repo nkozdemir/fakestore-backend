@@ -1,0 +1,65 @@
+from __future__ import annotations
+
+from typing import Iterable, Optional, Protocol, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from apps.catalog.models import Product, Category, Rating
+
+
+class CacheBackendProtocol(Protocol):
+    def get(self, key: str):
+        ...
+
+    def set(self, key: str, value, timeout=None):
+        ...
+
+
+class ProductRepositoryProtocol(Protocol):
+    def list(self, **filters) -> Iterable["Product"]:
+        ...
+
+    def list_by_category(self, category_name: str) -> Iterable["Product"]:
+        ...
+
+    def list_by_category_ids(self, category_ids) -> Iterable["Product"]:
+        ...
+
+    def get(self, **filters) -> Optional["Product"]:
+        ...
+
+    def create(self, **data) -> "Product":
+        ...
+
+    def set_categories(self, product: "Product", category_ids) -> None:
+        ...
+
+    def update_scalar(self, product: "Product", **fields) -> "Product":
+        ...
+
+    def delete(self, product: "Product") -> None:
+        ...
+
+    def recalculate_rating(self, product: "Product") -> "Product":
+        ...
+
+
+class RatingRepositoryProtocol(Protocol):
+    def for_product_user(self, product_id: int, user_id: int) -> Optional["Rating"]:
+        ...
+
+    def create(self, **data) -> "Rating":
+        ...
+
+
+class CategoryRepositoryProtocol(Protocol):
+    def list(self, **filters) -> Iterable["Category"]:
+        ...
+
+    def get(self, **filters) -> Optional["Category"]:
+        ...
+
+    def create(self, **data) -> "Category":
+        ...
+
+    def delete(self, category: "Category") -> None:
+        ...

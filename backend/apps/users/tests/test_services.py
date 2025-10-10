@@ -37,7 +37,8 @@ class FakeAddressRepository:
         self.storage = {}
         self._next_id = 1
 
-    def create(self, user, **data):
+    def create(self, **data):
+        user = data.pop('user')
         addr = FakeAddress(self._next_id, user=user, **data)
         self._next_id += 1
         self.storage[addr.id] = addr
@@ -68,8 +69,15 @@ class FakeUserRepository:
         self._next_id += 1
         return next_id
 
-    def list(self):
-        return list(self.storage.values())
+    def list(self, **filters):
+        users = list(self.storage.values())
+        if not filters:
+            return users
+        filtered = []
+        for user in users:
+            if all(getattr(user, key) == value for key, value in filters.items()):
+                filtered.append(user)
+        return filtered
 
     def get(self, **filters):
         for user in self.storage.values():
@@ -87,19 +95,9 @@ class FakeUserRepository:
         self.storage[user.id] = user
         return user
 
-
-class FakeQuerySet:
-    def __init__(self, records):
-        self.records = list(records)
-
-    def exists(self):
-        return bool(self.records)
-
-    def exclude(self, **filters):
-        def should_keep(record):
-            return any(getattr(record, key) != value for key, value in filters.items())
-        filtered = [record for record in self.records if should_keep(record)]
-        return FakeQuerySet(filtered)
+    def create_user(self, **data):
+        user = FakeUser(self, **data)
+        return self.add(user)
 
 
 class FakeUser:
@@ -122,42 +120,14 @@ class FakeUser:
         return self
 
 
-class FakeUserManager:
-    def __init__(self, repo):
-        self.repo = repo
-
-    def filter(self, **filters):
-        matches = [
-            user for user in self.repo.storage.values()
-            if all(getattr(user, key) == value for key, value in filters.items())
-        ]
-        return FakeQuerySet(matches)
-
-    def create_user(self, **data):
-        user = FakeUser(self.repo, **data)
-        self.repo.add(user)
-        return user
-
-    def create(self, **data):
-        return self.create_user(**data)
-
-
 class UserServiceUnitTests(unittest.TestCase):
     def setUp(self):
         self.user_repo = FakeUserRepository()
         self.address_repo = FakeAddressRepository()
-        self.user_manager = FakeUserManager(self.user_repo)
-        self.user_patch = patch('apps.users.services.User')
-        self.mock_user_cls = self.user_patch.start()
-        self.mock_user_cls.objects = self.user_manager
-        setattr(self.mock_user_cls, 'firstname', None)
-        setattr(self.mock_user_cls, 'lastname', None)
-        self.service = UserService()
-        self.service.users = self.user_repo
-        self.service.addresses = self.address_repo
-
-    def tearDown(self):
-        self.user_patch.stop()
+        self.service = UserService(
+            users=self.user_repo,
+            addresses=self.address_repo,
+        )
 
     def _user_to_dict(self, user):
         return {
@@ -209,16 +179,14 @@ class UserServiceUnitTests(unittest.TestCase):
 
     @patch('apps.users.services.user_to_dto')
     def test_delete_user_and_list_users(self, mock_user_to_dto):
-        user = self.user_manager.create_user(username='bob', email='bob@example.com')
-        self.user_repo.add(user)
+        user = self.user_repo.create_user(username='bob', email='bob@example.com')
         mock_user_to_dto.side_effect = self._user_to_dict
         self.assertTrue(self.service.delete_user(user.id))
         self.assertEqual(self.service.list_users(), [])
 
     @patch('apps.users.services.address_to_dto')
     def test_address_crud_roundtrip(self, mock_address_to_dto):
-        user = self.user_manager.create_user(username='carol', email='carol@example.com')
-        self.user_repo.add(user)
+        user = self.user_repo.create_user(username='carol', email='carol@example.com')
         mock_address_to_dto.side_effect = self._address_to_dict
 
         created = self.service.create_user_address(user.id, {
