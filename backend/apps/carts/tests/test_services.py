@@ -33,9 +33,9 @@ class StubProduct:
         self.id = product_id
         self.title = title
         self.price = price
-        self.description = ''
-        self.image = ''
-        self.rate = '0'
+        self.description = ""
+        self.image = ""
+        self.rate = "0"
         self.count = 0
         self.categories = StubCategoryManager()
 
@@ -78,21 +78,21 @@ class FakeCartRepository:
         self._pk = 1
 
     def create(self, **data):
-        cart = StubCart(self._pk, data.get('user_id'), data.get('date'))
+        cart = StubCart(self._pk, data.get("user_id"), data.get("date"))
         self._storage[self._pk] = cart
         self._pk += 1
         return cart
 
     def get(self, **filters):
-        cart_id = filters.get('id')
-        user_id = filters.get('user_id')
+        cart_id = filters.get("id")
+        user_id = filters.get("user_id")
         cart = self._storage.get(cart_id)
         if cart and user_id is not None and cart.user_id != user_id:
             return None
         return cart
 
     def list(self, **filters):
-        user_id = filters.get('user_id')
+        user_id = filters.get("user_id")
         carts = list(self._storage.values())
         if user_id is not None:
             return [c for c in carts if c.user_id == user_id]
@@ -113,9 +113,9 @@ class FakeCartProductRepository:
         self.cart_repository = cart_repository
 
     def create(self, **data):
-        cart: StubCart = data['cart']
-        product: StubProduct = data['product']
-        quantity: int = data['quantity']
+        cart: StubCart = data["cart"]
+        product: StubProduct = data["product"]
+        quantity: int = data["quantity"]
         item = StubCartProduct(cart, product, quantity)
         cart._items.append(item)
         return item
@@ -150,20 +150,24 @@ class FakeProductRepository:
         self._products = {p.id: p for p in products}
 
     def get(self, **filters):
-        product_id = filters.get('id')
+        product_id = filters.get("id")
         return self._products.get(product_id)
 
 
 class CartServiceUnitTests(unittest.TestCase):
     def setUp(self):
-        self.products_repo = FakeProductRepository([
-            StubProduct(1, 'Widget', '1.00'),
-            StubProduct(2, 'Gadget', '2.00'),
-        ])
+        self.products_repo = FakeProductRepository(
+            [
+                StubProduct(1, "Widget", "1.00"),
+                StubProduct(2, "Gadget", "2.00"),
+            ]
+        )
         self.cart_repo = FakeCartRepository()
         self.cart_products_repo = FakeCartProductRepository(self.cart_repo)
         self.cart_mapper = CartMapper(CartProductMapper(ProductMapper()))
-        self.atomic_patcher = patch('apps.carts.services.transaction.atomic', DummyAtomic())
+        self.atomic_patcher = patch(
+            "apps.carts.services.transaction.atomic", DummyAtomic()
+        )
         self.atomic_patcher.start()
         self.service = CartService(
             carts=self.cart_repo,
@@ -176,45 +180,68 @@ class CartServiceUnitTests(unittest.TestCase):
         self.atomic_patcher.stop()
 
     def test_create_and_get_cart(self):
-        dto = self.service.create_cart(5, {'products': [
-            {'productId': 1, 'quantity': 2},
-            {'productId': 2, 'quantity': 1},
-        ]})
+        dto = self.service.create_cart(
+            5,
+            {
+                "products": [
+                    {"productId": 1, "quantity": 2},
+                    {"productId": 2, "quantity": 1},
+                ]
+            },
+        )
         fetched = self.service.get_cart(dto.id)
         self.assertEqual(len(fetched.items), 2)
 
     def test_update_cart_replace_items(self):
-        dto = self.service.create_cart(6, {'products': [
-            {'productId': 1, 'quantity': 1},
-        ]})
-        updated = self.service.update_cart(dto.id, {
-            'items': [{'productId': 2, 'quantity': 3}]
-        })
+        dto = self.service.create_cart(
+            6,
+            {
+                "products": [
+                    {"productId": 1, "quantity": 1},
+                ]
+            },
+        )
+        updated = self.service.update_cart(
+            dto.id, {"items": [{"productId": 2, "quantity": 3}]}
+        )
         self.assertEqual(len(updated.items), 1)
         self.assertEqual(updated.items[0].product.id, 2)
         self.assertEqual(updated.items[0].quantity, 3)
 
     def test_patch_operations(self):
-        dto = self.service.create_cart(7, {'products': [
-            {'productId': 1, 'quantity': 1},
-        ]})
-        patched = self.service.patch_operations(dto.id, {
-            'add': [{'productId': 2, 'quantity': 2}],
-            'update': [{'productId': 1, 'quantity': 5}],
-            'remove': [999],
-        })
+        dto = self.service.create_cart(
+            7,
+            {
+                "products": [
+                    {"productId": 1, "quantity": 1},
+                ]
+            },
+        )
+        patched = self.service.patch_operations(
+            dto.id,
+            {
+                "add": [{"productId": 2, "quantity": 2}],
+                "update": [{"productId": 1, "quantity": 5}],
+                "remove": [999],
+            },
+        )
         quantities = {item.product.id: item.quantity for item in patched.items}
         self.assertEqual(quantities[1], 5)
         self.assertEqual(quantities[2], 2)
 
     def test_delete_cart(self):
-        dto = self.service.create_cart(8, {'products': [
-            {'productId': 1, 'quantity': 1},
-        ]})
+        dto = self.service.create_cart(
+            8,
+            {
+                "products": [
+                    {"productId": 1, "quantity": 1},
+                ]
+            },
+        )
         result = self.service.delete_cart(dto.id)
         self.assertTrue(result)
         self.assertIsNone(self.service.get_cart(dto.id))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

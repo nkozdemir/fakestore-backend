@@ -2,9 +2,11 @@ from rest_framework import serializers
 from .dtos import CartDTO, CartProductDTO
 from apps.catalog.serializers import ProductReadSerializer
 
+
 class CartProductSerializer(serializers.Serializer):
     product = ProductReadSerializer()
     quantity = serializers.IntegerField()
+
 
 class CartReadSerializer(serializers.Serializer):
     id = serializers.IntegerField()
@@ -31,5 +33,7 @@ class CartCreateSerializer(serializers.Serializer):
     # POST-only serializer: camelCase contract
     # userId is inferred from the JWT-authenticated user; do not include it in the payload
     date = serializers.CharField(required=False)
-    products = serializers.ListField(child=CartCreateProductSerializer(), required=False)
+    products = serializers.ListField(
+        child=CartCreateProductSerializer(), required=False
+    )
     # 'id' is not accepted here; it will be auto-assigned by the service

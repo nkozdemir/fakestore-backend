@@ -7,12 +7,12 @@ class FakeAddress:
     def __init__(self, address_id, user, **data):
         self.id = address_id
         self.user = user
-        self.street = data.get('street', '')
-        self.number = data.get('number', 0)
-        self.city = data.get('city', '')
-        self.zipcode = data.get('zipcode', '')
-        self.latitude = data.get('latitude')
-        self.longitude = data.get('longitude')
+        self.street = data.get("street", "")
+        self.number = data.get("number", 0)
+        self.city = data.get("city", "")
+        self.zipcode = data.get("zipcode", "")
+        self.latitude = data.get("latitude")
+        self.longitude = data.get("longitude")
 
     def save(self):
         return self
@@ -38,7 +38,7 @@ class FakeAddressRepository:
         self._next_id = 1
 
     def create(self, **data):
-        user = data.pop('user')
+        user = data.pop("user")
         addr = FakeAddress(self._next_id, user=user, **data)
         self._next_id += 1
         self.storage[addr.id] = addr
@@ -48,7 +48,7 @@ class FakeAddressRepository:
     def get(self, **filters):
         results = list(self.storage.values())
         for key, value in filters.items():
-            if key == 'user':
+            if key == "user":
                 results = [addr for addr in results if addr.user is value]
             else:
                 results = [addr for addr in results if getattr(addr, key) == value]
@@ -90,7 +90,7 @@ class FakeUserRepository:
         self.storage.pop(user.id, None)
 
     def add(self, user):
-        if getattr(user, 'id', None) is None:
+        if getattr(user, "id", None) is None:
             user.id = self._allocate_id()
         self.storage[user.id] = user
         return user
@@ -103,17 +103,17 @@ class FakeUserRepository:
 class FakeUser:
     def __init__(self, repo, **attrs):
         self._repo = repo
-        self.id = attrs.pop('id', None)
-        self.username = attrs.get('username', '')
-        self.email = attrs.get('email', '')
-        self.firstname = attrs.get('firstname', '')
-        self.lastname = attrs.get('lastname', '')
-        self.phone = attrs.get('phone', '')
-        self.password = attrs.get('password', '')
+        self.id = attrs.pop("id", None)
+        self.username = attrs.get("username", "")
+        self.email = attrs.get("email", "")
+        self.firstname = attrs.get("firstname", "")
+        self.lastname = attrs.get("lastname", "")
+        self.phone = attrs.get("phone", "")
+        self.password = attrs.get("password", "")
         self.addresses = FakeAddressManager()
 
     def set_password(self, password):
-        self.password = f'hashed:{password}'
+        self.password = f"hashed:{password}"
 
     def save(self, update_fields=None):
         self._repo.add(self)
@@ -131,85 +131,89 @@ class UserServiceUnitTests(unittest.TestCase):
 
     def _user_to_dict(self, user):
         return {
-            'id': user.id,
-            'username': user.username,
-            'email': user.email,
-            'firstname': user.firstname,
-            'lastname': user.lastname,
-            'phone': user.phone,
-            'addresses': [addr.id for addr in user.addresses.all()],
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "firstname": user.firstname,
+            "lastname": user.lastname,
+            "phone": user.phone,
+            "addresses": [addr.id for addr in user.addresses.all()],
         }
 
     def _address_to_dict(self, address):
         return {
-            'id': address.id,
-            'street': address.street,
-            'city': address.city,
+            "id": address.id,
+            "street": address.street,
+            "city": address.city,
         }
 
-    @patch('apps.users.services.address_to_dto')
-    @patch('apps.users.services.user_to_dto')
-    def test_create_user_creates_address_and_hashes_password(self, mock_user_to_dto, mock_address_to_dto):
+    @patch("apps.users.services.address_to_dto")
+    @patch("apps.users.services.user_to_dto")
+    def test_create_user_creates_address_and_hashes_password(
+        self, mock_user_to_dto, mock_address_to_dto
+    ):
         mock_user_to_dto.side_effect = self._user_to_dict
         mock_address_to_dto.side_effect = self._address_to_dict
         payload = {
-            'username': 'alice',
-            'email': 'alice@example.com',
-            'firstname': 'Alice',
-            'lastname': 'Example',
-            'phone': '123',
-            'password': 'Secret123',
-            'address': {
-                'street': 'Main',
-                'number': 10,
-                'city': 'Town',
-                'zipcode': '00000',
-                'geolocation': {'lat': '1.0', 'long': '2.0'},
-            }
+            "username": "alice",
+            "email": "alice@example.com",
+            "firstname": "Alice",
+            "lastname": "Example",
+            "phone": "123",
+            "password": "Secret123",
+            "address": {
+                "street": "Main",
+                "number": 10,
+                "city": "Town",
+                "zipcode": "00000",
+                "geolocation": {"lat": "1.0", "long": "2.0"},
+            },
         }
         dto = self.service.create_user(payload.copy())
-        self.assertEqual(dto['username'], 'alice')
-        self.assertEqual(dto['addresses'], [1])
-        stored_user = self.user_repo.get(id=dto['id'])
-        self.assertEqual(stored_user.password, 'hashed:Secret123')
+        self.assertEqual(dto["username"], "alice")
+        self.assertEqual(dto["addresses"], [1])
+        stored_user = self.user_repo.get(id=dto["id"])
+        self.assertEqual(stored_user.password, "hashed:Secret123")
 
     def test_update_user_returns_none_for_missing_user(self):
-        result = self.service.update_user(99, {'username': 'ghost'})
+        result = self.service.update_user(99, {"username": "ghost"})
         self.assertIsNone(result)
 
-    @patch('apps.users.services.user_to_dto')
+    @patch("apps.users.services.user_to_dto")
     def test_delete_user_and_list_users(self, mock_user_to_dto):
-        user = self.user_repo.create_user(username='bob', email='bob@example.com')
+        user = self.user_repo.create_user(username="bob", email="bob@example.com")
         mock_user_to_dto.side_effect = self._user_to_dict
         self.assertTrue(self.service.delete_user(user.id))
         self.assertEqual(self.service.list_users(), [])
 
-    @patch('apps.users.services.address_to_dto')
+    @patch("apps.users.services.address_to_dto")
     def test_address_crud_roundtrip(self, mock_address_to_dto):
-        user = self.user_repo.create_user(username='carol', email='carol@example.com')
+        user = self.user_repo.create_user(username="carol", email="carol@example.com")
         mock_address_to_dto.side_effect = self._address_to_dict
 
-        created = self.service.create_user_address(user.id, {
-            'street': 'Oak',
-            'number': 5,
-            'city': 'City',
-            'zipcode': '11111',
-            'geolocation': {'lat': '5.0', 'long': '6.0'},
-        })
-        self.assertEqual(created['street'], 'Oak')
+        created = self.service.create_user_address(
+            user.id,
+            {
+                "street": "Oak",
+                "number": 5,
+                "city": "City",
+                "zipcode": "11111",
+                "geolocation": {"lat": "5.0", "long": "6.0"},
+            },
+        )
+        self.assertEqual(created["street"], "Oak")
 
         addresses = self.service.list_user_addresses(user.id)
         self.assertEqual(len(addresses), 1)
 
-        address_id = addresses[0]['id']
-        updated = self.service.update_user_address(user.id, address_id, {
-            'city': 'New City',
-            'geolocation': {'lat': '7.0'}
-        })
-        self.assertEqual(updated['city'], 'New City')
+        address_id = addresses[0]["id"]
+        updated = self.service.update_user_address(
+            user.id, address_id, {"city": "New City", "geolocation": {"lat": "7.0"}}
+        )
+        self.assertEqual(updated["city"], "New City")
 
         fetched = self.service.get_user_address(user.id, address_id)
-        self.assertEqual(fetched['id'], address_id)
+        self.assertEqual(fetched["id"], address_id)
 
         self.assertTrue(self.service.delete_user_address(user.id, address_id))
         self.assertEqual(self.service.list_user_addresses(user.id), [])
@@ -217,5 +221,9 @@ class UserServiceUnitTests(unittest.TestCase):
     def test_address_methods_return_none_when_user_missing(self):
         self.assertIsNone(self.service.list_user_addresses(1))
         self.assertIsNone(self.service.get_user_address(1, 1))
-        self.assertIsNone(self.service.create_user_address(1, {'street': 'X', 'number': 1, 'city': 'C', 'zipcode': 'Z'}))
+        self.assertIsNone(
+            self.service.create_user_address(
+                1, {"street": "X", "number": 1, "city": "C", "zipcode": "Z"}
+            )
+        )
         self.assertFalse(self.service.delete_user_address(1, 1))

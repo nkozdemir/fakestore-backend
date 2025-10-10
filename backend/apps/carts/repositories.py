@@ -1,6 +1,7 @@
 from apps.common.repository import GenericRepository
 from .models import Cart, CartProduct
 
+
 class CartRepository(GenericRepository[Cart]):
     def __init__(self):
         super().__init__(Cart)
@@ -14,6 +15,7 @@ class CartRepository(GenericRepository[Cart]):
         if dirty:
             cart.save()
         return cart
+
 
 class CartProductRepository(GenericRepository[CartProduct]):
     def __init__(self):

@@ -8,44 +8,78 @@ class Migration(migrations.Migration):
 
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
-            name='Category',
+            name="Category",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=100, unique=True)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("name", models.CharField(max_length=100, unique=True)),
             ],
         ),
         migrations.CreateModel(
-            name='Product',
+            name="Product",
             fields=[
-                ('id', models.IntegerField(primary_key=True, serialize=False)),
-                ('title', models.CharField(max_length=255)),
-                ('price', models.DecimalField(decimal_places=2, max_digits=10)),
-                ('description', models.TextField()),
-                ('image', models.TextField()),
-                ('rate', models.DecimalField(decimal_places=1, default=0, max_digits=3)),
-                ('count', models.IntegerField(default=0)),
+                ("id", models.IntegerField(primary_key=True, serialize=False)),
+                ("title", models.CharField(max_length=255)),
+                ("price", models.DecimalField(decimal_places=2, max_digits=10)),
+                ("description", models.TextField()),
+                ("image", models.TextField()),
+                (
+                    "rate",
+                    models.DecimalField(decimal_places=1, default=0, max_digits=3),
+                ),
+                ("count", models.IntegerField(default=0)),
             ],
         ),
         migrations.CreateModel(
-            name='ProductCategory',
+            name="ProductCategory",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('category', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='catalog.category')),
-                ('product', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='catalog.product')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "category",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        to="catalog.category",
+                    ),
+                ),
+                (
+                    "product",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        to="catalog.product",
+                    ),
+                ),
             ],
             options={
-                'db_table': 'product_categories',
-                'unique_together': {('product', 'category')},
+                "db_table": "product_categories",
+                "unique_together": {("product", "category")},
             },
         ),
         migrations.AddField(
-            model_name='product',
-            name='categories',
-            field=models.ManyToManyField(related_name='products', through='catalog.ProductCategory', to='catalog.category'),
+            model_name="product",
+            name="categories",
+            field=models.ManyToManyField(
+                related_name="products",
+                through="catalog.ProductCategory",
+                to="catalog.category",
+            ),
         ),
     ]

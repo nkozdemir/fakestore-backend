@@ -10,10 +10,10 @@ class CategorySerializer(serializers.Serializer):
         # Support dataclass DTO or dict
         if instance is None:
             return None
-        if hasattr(instance, '__dataclass_fields__'):
+        if hasattr(instance, "__dataclass_fields__"):
             return {
-                'id': getattr(instance, 'id'),
-                'name': getattr(instance, 'name'),
+                "id": getattr(instance, "id"),
+                "name": getattr(instance, "name"),
             }
         # Fallback to default (e.g., if a model or dict already)
         return super().to_representation(instance)
@@ -34,16 +34,18 @@ class ProductReadSerializer(serializers.Serializer):
         if instance is None:
             return None
         # If it's already a dataclass DTO, extract attributes directly for speed
-        if hasattr(instance, '__dataclass_fields__'):
+        if hasattr(instance, "__dataclass_fields__"):
             return {
-                'id': getattr(instance, 'id'),
-                'title': getattr(instance, 'title'),
-                'price': getattr(instance, 'price'),
-                'description': getattr(instance, 'description'),
-                'image': getattr(instance, 'image'),
-                'rate': getattr(instance, 'rate'),
-                'count': getattr(instance, 'count'),
-                'categories': CategorySerializer(getattr(instance, 'categories'), many=True).data,
+                "id": getattr(instance, "id"),
+                "title": getattr(instance, "title"),
+                "price": getattr(instance, "price"),
+                "description": getattr(instance, "description"),
+                "image": getattr(instance, "image"),
+                "rate": getattr(instance, "rate"),
+                "count": getattr(instance, "count"),
+                "categories": CategorySerializer(
+                    getattr(instance, "categories"), many=True
+                ).data,
             }
         return super().to_representation(instance)
 

@@ -23,9 +23,9 @@ class StubProduct:
         product_id: int,
         title: str,
         price,
-        description: str = '',
-        image: str = '',
-        rate: str = '0',
+        description: str = "",
+        image: str = "",
+        rate: str = "0",
         count: int = 0,
         categories=None,
     ):

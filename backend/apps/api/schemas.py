@@ -12,7 +12,9 @@ class ErrorResponseSerializer(serializers.Serializer):
     error = ErrorDetailSerializer()
 
 
-def paginated_response(item_serializer_class: type[serializers.Serializer]) -> type[serializers.Serializer]:
+def paginated_response(
+    item_serializer_class: type[serializers.Serializer],
+) -> type[serializers.Serializer]:
     """Create an inline paginated response serializer with standard DRF PageNumberPagination shape.
 
     Returns a serializer with fields: count, next, previous, results[item_serializer].

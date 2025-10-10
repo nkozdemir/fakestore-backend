@@ -25,13 +25,15 @@ class FakeUserSerializer:
         self.many = many
         self.partial = partial
         self.errors = {}
-        if isinstance(data, dict) and data.get('__invalid'):
+        if isinstance(data, dict) and data.get("__invalid"):
             self._is_valid = False
-            self.errors = {'invalid': True}
+            self.errors = {"invalid": True}
         else:
             self._is_valid = True
         if isinstance(data, dict):
-            self.validated_data = {k: v for k, v in data.items() if not k.startswith('__')}
+            self.validated_data = {
+                k: v for k, v in data.items() if not k.startswith("__")
+            }
         else:
             self.validated_data = data
 
@@ -50,12 +52,14 @@ class FakeAddressWriteSerializer:
         self._data = data or {}
         self.partial = partial
         self.errors = {}
-        if self._data.get('__invalid'):
+        if self._data.get("__invalid"):
             self._is_valid = False
-            self.errors = {'invalid': True}
+            self.errors = {"invalid": True}
         else:
             self._is_valid = True
-        self.validated_data = {k: v for k, v in self._data.items() if not k.startswith('__')}
+        self.validated_data = {
+            k: v for k, v in self._data.items() if not k.startswith("__")
+        }
 
     def is_valid(self, raise_exception=False):
         if not self._is_valid and raise_exception:
@@ -76,14 +80,14 @@ class FakeAddressSerializer:
 class StubUserService:
     def __init__(self):
         self.list_result = []
-        self.create_result = {'id': 1}
-        self.get_result = {'id': 1}
-        self.update_result = {'id': 1}
+        self.create_result = {"id": 1}
+        self.get_result = {"id": 1}
+        self.update_result = {"id": 1}
         self.delete_result = True
         self.address_list_result = []
-        self.address_create_result = {'id': 1}
-        self.address_get_result = {'id': 1}
-        self.address_update_result = {'id': 1}
+        self.address_create_result = {"id": 1}
+        self.address_get_result = {"id": 1}
+        self.address_update_result = {"id": 1}
         self.address_delete_result = True
         self.last_create_payload = None
         self.last_update_payload = None
@@ -136,9 +140,15 @@ class StubUserService:
 class UserViewsUnitTests(unittest.TestCase):
     def setUp(self):
         self.service = StubUserService()
-        self.user_serializer_patch = patch('apps.users.views.UserSerializer', FakeUserSerializer)
-        self.address_write_patch = patch('apps.users.views.AddressWriteSerializer', FakeAddressWriteSerializer)
-        self.address_serializer_patch = patch('apps.users.views.AddressSerializer', FakeAddressSerializer)
+        self.user_serializer_patch = patch(
+            "apps.users.views.UserSerializer", FakeUserSerializer
+        )
+        self.address_write_patch = patch(
+            "apps.users.views.AddressWriteSerializer", FakeAddressWriteSerializer
+        )
+        self.address_serializer_patch = patch(
+            "apps.users.views.AddressSerializer", FakeAddressSerializer
+        )
         self.user_serializer_patch.start()
         self.address_write_patch.start()
         self.address_serializer_patch.start()
@@ -149,33 +159,33 @@ class UserViewsUnitTests(unittest.TestCase):
         self.address_serializer_patch.stop()
 
     def test_user_list_get_returns_service_data(self):
-        self.service.list_result = [{'id': 1}]
+        self.service.list_result = [{"id": 1}]
         view = UserListView()
         view.service = self.service
         response = view.get(DummyRequest())
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data, [{'id': 1}])
+        self.assertEqual(response.data, [{"id": 1}])
 
     def test_user_list_post_success_and_validation_error(self):
         view = UserListView()
         view.service = self.service
-        success_request = DummyRequest({'username': 'new'})
+        success_request = DummyRequest({"username": "new"})
         response_ok = view.post(success_request)
         self.assertEqual(response_ok.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(self.service.last_create_payload['username'], 'new')
+        self.assertEqual(self.service.last_create_payload["username"], "new")
 
-        invalid_request = DummyRequest({'__invalid': True})
+        invalid_request = DummyRequest({"__invalid": True})
         response_invalid = view.post(invalid_request)
         self.assertEqual(response_invalid.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_user_list_post_service_validation_error(self):
         view = UserListView()
         view.service = self.service
-        self.service.create_result = IntegrityError('duplicate')
-        request = DummyRequest({'username': 'duplicate'})
+        self.service.create_result = IntegrityError("duplicate")
+        request = DummyRequest({"username": "duplicate"})
         response = view.post(request)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data['error']['code'], 'VALIDATION_ERROR')
+        self.assertEqual(response.data["error"]["code"], "VALIDATION_ERROR")
 
     def test_user_detail_get_and_delete_paths(self):
         view = UserDetailView()
@@ -199,34 +209,37 @@ class UserViewsUnitTests(unittest.TestCase):
     def test_user_detail_put_success(self):
         view = UserDetailView()
         view.service = self.service
-        self.service.update_result = {'id': 1, 'username': 'updated'}
-        with patch('apps.users.views.User') as mock_user_cls:
+        self.service.update_result = {"id": 1, "username": "updated"}
+        with patch("apps.users.views.User") as mock_user_cls:
             mock_user_cls.objects.filter.return_value.first.return_value = object()
-            response = view.put(DummyRequest({'username': 'updated'}), user_id=1)
+            response = view.put(DummyRequest({"username": "updated"}), user_id=1)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         user_id, payload = self.service.last_update_payload
         self.assertEqual(user_id, 1)
-        self.assertEqual(payload['username'], 'updated')
+        self.assertEqual(payload["username"], "updated")
 
     def test_user_detail_patch_invalid_serializer(self):
         view = UserDetailView()
         view.service = self.service
-        with patch('apps.users.views.User') as mock_user_cls:
+        with patch("apps.users.views.User") as mock_user_cls:
             mock_user_cls.objects.filter.return_value.first.return_value = object()
-            response = view.patch(DummyRequest({'__invalid': True}), user_id=1)
+            response = view.patch(DummyRequest({"__invalid": True}), user_id=1)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_user_address_list_post_requires_auth(self):
         view = UserAddressListView()
         view.service = self.service
-        unauthorized = view.post(DummyRequest({'street': 'Main'}))
+        unauthorized = view.post(DummyRequest({"street": "Main"}))
         self.assertEqual(unauthorized.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_user_address_list_post_success(self):
         view = UserAddressListView()
         view.service = self.service
-        self.service.address_create_result = {'id': 1, 'street': 'Main'}
-        request = DummyRequest({'street': 'Main'}, user=type('U', (), {'id': 5, 'is_authenticated': True})())
+        self.service.address_create_result = {"id": 1, "street": "Main"}
+        request = DummyRequest(
+            {"street": "Main"},
+            user=type("U", (), {"id": 5, "is_authenticated": True})(),
+        )
         request.validated_user_id = 5
         response = view.post(request)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -238,7 +251,7 @@ class UserViewsUnitTests(unittest.TestCase):
         response_unauth = view.get(DummyRequest(), address_id=1)
         self.assertEqual(response_unauth.status_code, status.HTTP_401_UNAUTHORIZED)
 
-        user = type('U', (), {'id': 7})()
+        user = type("U", (), {"id": 7})()
         self.service.address_get_result = None
         req_missing = DummyRequest(user=user)
         req_missing.validated_user_id = user.id

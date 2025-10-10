@@ -8,33 +8,47 @@ class Migration(migrations.Migration):
 
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
-            name='User',
+            name="User",
             fields=[
-                ('id', models.IntegerField(primary_key=True, serialize=False)),
-                ('firstname', models.CharField(max_length=100)),
-                ('lastname', models.CharField(max_length=100)),
-                ('email', models.CharField(max_length=150, unique=True)),
-                ('username', models.CharField(max_length=100, unique=True)),
-                ('password', models.CharField(max_length=255)),
-                ('phone', models.CharField(max_length=50)),
+                ("id", models.IntegerField(primary_key=True, serialize=False)),
+                ("firstname", models.CharField(max_length=100)),
+                ("lastname", models.CharField(max_length=100)),
+                ("email", models.CharField(max_length=150, unique=True)),
+                ("username", models.CharField(max_length=100, unique=True)),
+                ("password", models.CharField(max_length=255)),
+                ("phone", models.CharField(max_length=50)),
             ],
         ),
         migrations.CreateModel(
-            name='Address',
+            name="Address",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('street', models.CharField(max_length=150)),
-                ('number', models.IntegerField()),
-                ('city', models.CharField(max_length=100)),
-                ('zipcode', models.CharField(max_length=50)),
-                ('latitude', models.DecimalField(decimal_places=6, max_digits=10)),
-                ('longitude', models.DecimalField(decimal_places=6, max_digits=10)),
-                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='addresses', to='users.user')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("street", models.CharField(max_length=150)),
+                ("number", models.IntegerField()),
+                ("city", models.CharField(max_length=100)),
+                ("zipcode", models.CharField(max_length=50)),
+                ("latitude", models.DecimalField(decimal_places=6, max_digits=10)),
+                ("longitude", models.DecimalField(decimal_places=6, max_digits=10)),
+                (
+                    "user",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="addresses",
+                        to="users.user",
+                    ),
+                ),
             ],
         ),
     ]

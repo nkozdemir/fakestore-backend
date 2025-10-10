@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import List, Optional, Dict, Any
 
+
 # Product Commands
 @dataclass
 class ProductCreateCommand:
@@ -29,16 +30,19 @@ class ProductCreateCommand:
     def from_raw(payload: Dict[str, Any]):
         data = dict(payload or {})
         # ignore id if present
-        data.pop('id', None)
+        data.pop("id", None)
         return ProductCreateCommand(
-            title=str(data.get('title', '')).strip(),
-            price=str(data.get('price', '0')).strip(),
-            description=str(data.get('description', '')).strip(),
-            image=str(data.get('image', '')).strip(),
-            categories=ProductCreateCommand._parse_categories(data.get('categories') or []),
-            rate=data.get('rate'),
-            count=data.get('count'),
+            title=str(data.get("title", "")).strip(),
+            price=str(data.get("price", "0")).strip(),
+            description=str(data.get("description", "")).strip(),
+            image=str(data.get("image", "")).strip(),
+            categories=ProductCreateCommand._parse_categories(
+                data.get("categories") or []
+            ),
+            rate=data.get("rate"),
+            count=data.get("count"),
         )
+
 
 @dataclass
 class ProductUpdateCommand:
@@ -55,21 +59,22 @@ class ProductUpdateCommand:
     @staticmethod
     def from_raw(product_id: int, payload: Dict[str, Any], partial: bool):
         data = dict(payload or {})
-        data.pop('id', None)
+        data.pop("id", None)
         cats = None
-        if 'categories' in data:
-            cats = ProductCreateCommand._parse_categories(data.get('categories') or [])
+        if "categories" in data:
+            cats = ProductCreateCommand._parse_categories(data.get("categories") or [])
         return ProductUpdateCommand(
             product_id=product_id,
             partial=partial,
-            title=data.get('title'),
-            price=str(data.get('price')) if 'price' in data else None,
-            description=data.get('description'),
-            image=data.get('image'),
+            title=data.get("title"),
+            price=str(data.get("price")) if "price" in data else None,
+            description=data.get("description"),
+            image=data.get("image"),
             categories=cats,
-            rate=data.get('rate') if 'rate' in data else None,
-            count=data.get('count') if 'count' in data else None,
+            rate=data.get("rate") if "rate" in data else None,
+            count=data.get("count") if "count" in data else None,
         )
+
 
 # Rating Command
 @dataclass

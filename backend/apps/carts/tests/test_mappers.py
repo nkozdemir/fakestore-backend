@@ -23,9 +23,9 @@ class StubProduct:
         self.id = product_id
         self.title = title
         self.price = price
-        self.description = 'd'
-        self.image = 'img'
-        self.rate = '4.0'
+        self.description = "d"
+        self.image = "img"
+        self.rate = "4.0"
         self.count = 2
         self.categories = StubCategoryManager()
 

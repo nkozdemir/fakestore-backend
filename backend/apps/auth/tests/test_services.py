@@ -13,7 +13,7 @@ class FakeUserRepository:
         self._existing_usernames = set()
         self._existing_emails = set()
         self._created_payloads = []
-        self._supports_fields = {'firstname', 'lastname'}
+        self._supports_fields = {"firstname", "lastname"}
 
     def username_exists(self, username: str) -> bool:
         return username in self._existing_usernames
@@ -26,7 +26,7 @@ class FakeUserRepository:
 
     def create_user(self, **data):
         payload = dict(data)
-        payload.setdefault('id', len(self._created_payloads) + 1)
+        payload.setdefault("id", len(self._created_payloads) + 1)
         user = FakeUser(**payload)
         self._created_payloads.append(payload)
         self._existing_usernames.add(user.username)
@@ -40,28 +40,32 @@ class RegistrationServiceTests(unittest.TestCase):
         self.service = RegistrationService(users=self.repo)
 
     def test_register_success(self):
-        result = self.service.register({
-            'username': 'user',
-            'email': 'user@example.com',
-            'password': 'Secret123',
-            'first_name': 'Alice',
-            'last_name': 'Example',
-        })
-        self.assertEqual(result['username'], 'user')
-        self.assertEqual(result['email'], 'user@example.com')
-        self.assertEqual(result['id'], 1)
+        result = self.service.register(
+            {
+                "username": "user",
+                "email": "user@example.com",
+                "password": "Secret123",
+                "first_name": "Alice",
+                "last_name": "Example",
+            }
+        )
+        self.assertEqual(result["username"], "user")
+        self.assertEqual(result["email"], "user@example.com")
+        self.assertEqual(result["id"], 1)
 
     def test_register_duplicate_username(self):
-        self.repo._existing_usernames.add('dup')
-        result = self.service.register({
-            'username': 'dup',
-            'email': 'dup@example.com',
-            'password': 'Secret123',
-            'first_name': 'A',
-            'last_name': 'B',
-        })
-        self.assertEqual(result[0], 'VALIDATION_ERROR')
+        self.repo._existing_usernames.add("dup")
+        result = self.service.register(
+            {
+                "username": "dup",
+                "email": "dup@example.com",
+                "password": "Secret123",
+                "first_name": "A",
+                "last_name": "B",
+            }
+        )
+        self.assertEqual(result[0], "VALIDATION_ERROR")
 
 
-if __name__ == '__main__':  # pragma: no cover
+if __name__ == "__main__":  # pragma: no cover
     unittest.main()

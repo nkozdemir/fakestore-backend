@@ -1,7 +1,8 @@
 from typing import Type, TypeVar, Generic, Iterable, Optional
 from django.db import models
 
-T = TypeVar('T', bound=models.Model)
+T = TypeVar("T", bound=models.Model)
+
 
 class GenericRepository(Generic[T]):
     def __init__(self, model: Type[T]):

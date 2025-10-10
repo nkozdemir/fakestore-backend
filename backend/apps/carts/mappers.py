@@ -22,7 +22,9 @@ class CartMapper:
 
     def to_dto(self, cart: Cart) -> CartDTO:
         items = self.cart_product_mapper.many_to_dto(cart.cart_products.all())
-        return CartDTO(id=cart.id, user_id=cart.user_id, date=str(cart.date), items=items)
+        return CartDTO(
+            id=cart.id, user_id=cart.user_id, date=str(cart.date), items=items
+        )
 
     def many_to_dto(self, carts: Iterable[Cart]) -> List[CartDTO]:
         return [self.to_dto(c) for c in carts]

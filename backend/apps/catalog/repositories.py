@@ -1,9 +1,11 @@
 from apps.common.repository import GenericRepository
 from .models import Category, Product, Rating
 
+
 class CategoryRepository(GenericRepository[Category]):
     def __init__(self):
         super().__init__(Category)
+
 
 class ProductRepository(GenericRepository[Product]):
     def __init__(self):
@@ -11,21 +13,24 @@ class ProductRepository(GenericRepository[Product]):
 
     def list(self, **filters):  # type: ignore[override]
         """Return products with categories prefetched to avoid N+1 during DTO mapping."""
-        return self.model.objects.filter(**filters).prefetch_related('categories')
+        return self.model.objects.filter(**filters).prefetch_related("categories")
 
     def list_by_category(self, category_name: str):
-        return self.model.objects.filter(categories__name=category_name).prefetch_related('categories')
+        return self.model.objects.filter(
+            categories__name=category_name
+        ).prefetch_related("categories")
 
     def list_by_category_ids(self, category_ids):
         return (
             self.model.objects.filter(categories__id__in=category_ids)
             .distinct()
-            .prefetch_related('categories')
+            .prefetch_related("categories")
         )
 
     # --- Helper methods for service orchestration ---
     def set_categories(self, product: Product, category_ids):
         from .models import Category  # local import to avoid circulars in migrations
+
         qs = Category.objects.filter(id__in=category_ids) if category_ids else []
         product.categories.set(qs)
 
@@ -41,16 +46,18 @@ class ProductRepository(GenericRepository[Product]):
 
     def recalculate_rating(self, product: Product):
         from django.db.models import Avg, Count
-        agg = product.ratings.aggregate(avg=Avg('value'), count=Count('id'))
-        count = agg['count'] or 0
+
+        agg = product.ratings.aggregate(avg=Avg("value"), count=Count("id"))
+        count = agg["count"] or 0
         if not count:
             product.rate = 0
             product.count = 0
         else:
-            product.rate = round(float(agg['avg']) + 1e-8, 1)
+            product.rate = round(float(agg["avg"]) + 1e-8, 1)
             product.count = count
-        product.save(update_fields=['rate', 'count'])
+        product.save(update_fields=["rate", "count"])
         return product
+
 
 class RatingRepository(GenericRepository[Rating]):
     def __init__(self):

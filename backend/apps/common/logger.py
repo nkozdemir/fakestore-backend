@@ -5,7 +5,12 @@ from typing import Any, Dict, Optional
 class AppLogger:
     """Thin wrapper around the stdlib logger that adds lightweight context binding."""
 
-    def __init__(self, name: str, context: Optional[Dict[str, Any]] = None, _logger: Optional[logging.Logger] = None):
+    def __init__(
+        self,
+        name: str,
+        context: Optional[Dict[str, Any]] = None,
+        _logger: Optional[logging.Logger] = None,
+    ):
         self._logger = _logger or logging.getLogger(name)
         self._name = name
         self._context = context or {}
@@ -40,7 +45,9 @@ class AppLogger:
     def _format(message: str, context: Dict[str, Any]) -> str:
         if not context:
             return message
-        ctx_str = " ".join(f"{key}={AppLogger._stringify(value)}" for key, value in context.items())
+        ctx_str = " ".join(
+            f"{key}={AppLogger._stringify(value)}" for key, value in context.items()
+        )
         return f"{message} | {ctx_str}"
 
     @staticmethod

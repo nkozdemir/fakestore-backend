@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 
+
 class User(AbstractUser):
     # id, username, email, password, is_active, is_staff, is_superuser, groups, user_permissions are inherited
     firstname = models.CharField(max_length=100)
@@ -12,8 +13,9 @@ class User(AbstractUser):
     def __str__(self):
         return self.username
 
+
 class Address(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='addresses')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="addresses")
     street = models.CharField(max_length=150)
     number = models.IntegerField()
     city = models.CharField(max_length=100)
