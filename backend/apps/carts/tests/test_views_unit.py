@@ -59,6 +59,15 @@ class CartViewsUnitTests(unittest.TestCase):
         self.assertEqual(response.data, carts)
         service_mock.list_carts.assert_called_once_with(user_id=5)
 
+    def test_cart_list_invalid_user_id_returns_validation_error(self):
+        service_mock = Mock()
+        with patch.object(CartListView, "service", service_mock):
+            request = self.factory.get("/api/carts/", {"userId": "bad"})
+            response = self.dispatch(request, CartListView)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["error"]["code"], "VALIDATION_ERROR")
+        service_mock.list_carts.assert_not_called()
+
     def test_cart_list_post_requires_authenticated_user_id(self):
         service_mock = Mock()
         user = types.SimpleNamespace(id=None, is_authenticated=True)

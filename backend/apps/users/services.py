@@ -52,7 +52,8 @@ class UserService:
                 longitude=geo.get("long"),
             )
         self.logger.info("User created", user_id=user.id, username=user.username)
-        return user_to_dto(user)
+        refreshed = self.users.get(id=user.id)
+        return user_to_dto(refreshed) if refreshed else user_to_dto(user)
 
     def update_user(self, user_id: int, data: Dict[str, Any]):
         self.logger.info("Updating user", user_id=user_id)
@@ -79,7 +80,8 @@ class UserService:
                 longitude=geo.get("long"),
             )
         self.logger.info("User updated", user_id=user.id)
-        return user_to_dto(user)
+        refreshed = self.users.get(id=user_id)
+        return user_to_dto(refreshed) if refreshed else user_to_dto(user)
 
     def delete_user(self, user_id: int) -> bool:
         self.logger.info("Deleting user", user_id=user_id)

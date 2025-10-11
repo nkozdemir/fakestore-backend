@@ -1,3 +1,5 @@
+from typing import Optional
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -44,14 +46,28 @@ class CartListView(APIView):
         user_id_param = request.query_params.get("userId") or request.query_params.get(
             "user_id"
         )
-        self.log.debug("Listing carts via API", user_id=user_id_param)
+        user_id: Optional[int] = None
+        if user_id_param is not None:
+            try:
+                user_id = int(user_id_param)
+            except (TypeError, ValueError):
+                self.log.warning(
+                    "Invalid userId query parameter",
+                    user_id=user_id_param,
+                    path=request.path,
+                )
+                return error_response(
+                    "VALIDATION_ERROR",
+                    "userId must be an integer",
+                    {"userId": user_id_param},
+                )
+        self.log.debug("Listing carts via API", user_id=user_id)
         data = (
-            self.service.list_carts(user_id=int(user_id_param))
-            if user_id_param
+            self.service.list_carts(user_id=user_id)
+            if user_id is not None
             else self.service.list_carts()
         )
-        serializer = CartReadSerializer(data=data, many=True)
-        serializer.is_valid(raise_exception=False)
+        serializer = CartReadSerializer(data, many=True)
         return Response(serializer.data)
 
     @extend_schema(
@@ -214,6 +230,5 @@ class CartByUserView(APIView):
     def get(self, request, user_id: int):
         self.log.debug("Listing carts for user", user_id=user_id)
         data = self.service.list_carts(user_id=user_id)
-        serializer = CartReadSerializer(data=data, many=True)
-        serializer.is_valid(raise_exception=False)
+        serializer = CartReadSerializer(data, many=True)
         return Response(serializer.data)

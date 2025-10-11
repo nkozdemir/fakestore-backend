@@ -1,5 +1,7 @@
 import types
 import unittest
+from unittest.mock import patch
+
 from apps.catalog.services import ProductService, CategoryService
 
 
@@ -202,6 +204,11 @@ class ProductServiceUnitTests(unittest.TestCase):
             cache_backend=self.cache,
             disable_cache=True,
         )
+        self.rating_user_id = 1
+        self.user_objects_patcher = patch("apps.catalog.services.User.objects")
+        self.mock_user_objects = self.user_objects_patcher.start()
+        self.addCleanup(self.user_objects_patcher.stop)
+        self.mock_user_objects.filter.return_value.exists.return_value = True
 
     def test_create_and_get_product(self):
         cat = self.category_repo.create(name="Books")
@@ -235,12 +242,13 @@ class ProductServiceUnitTests(unittest.TestCase):
         product = self.product_repo.create(
             title="Rated", price="5.00", description="d", image="i"
         )
-        summary = self.service.set_user_rating(product.id, user_id=10, value=4)
+        user_id = self.rating_user_id
+        summary = self.service.set_user_rating(product.id, user_id=user_id, value=4)
         self.assertEqual(summary["rating"]["count"], 1)
         self.assertEqual(summary["rating"]["rate"], 4.0)
-        summary = self.service.set_user_rating(product.id, user_id=10, value=5)
+        summary = self.service.set_user_rating(product.id, user_id=user_id, value=5)
         self.assertEqual(summary["rating"]["rate"], 5.0)
-        summary = self.service.delete_user_rating(product.id, user_id=10)
+        summary = self.service.delete_user_rating(product.id, user_id=user_id)
         self.assertEqual(summary["rating"]["count"], 0)
 
     def test_list_products_cache_hit(self):
@@ -287,12 +295,40 @@ class ProductServiceUnitTests(unittest.TestCase):
         self.assertEqual(version_after_delete, service_cache._default_version + 3)
 
     def test_rating_validation_and_missing_product(self):
-        error = self.service.set_user_rating(999, user_id=1, value=4)
+        error = self.service.set_user_rating(999, user_id=self.rating_user_id, value=4)
         self.assertEqual(error[0], "NOT_FOUND")
-        error = self.service.set_user_rating(self.product_repo._pk, user_id=1, value=10)
+        error = self.service.set_user_rating(
+            self.product_repo._pk, user_id=self.rating_user_id, value=10
+        )
         self.assertEqual(error[0], "VALIDATION_ERROR")
         summary = self.service.get_rating_summary(999)
         self.assertIsNone(summary)
+
+    def test_rating_missing_user_returns_error(self):
+        product = self.product_repo.create(
+            title="Rated", price="5.00", description="d", image="i"
+        )
+        missing_user_id = self.rating_user_id + 999
+        self.mock_user_objects.filter.return_value.exists.return_value = False
+        result = self.service.set_user_rating(
+            product.id, user_id=missing_user_id, value=4
+        )
+        self.assertEqual(result[0], "NOT_FOUND")
+        self.assertEqual(result[1], "User not found")
+        self.assertIn("userId", result[2])
+        self.mock_user_objects.filter.return_value.exists.return_value = True
+
+    def test_rating_delete_missing_user_returns_error(self):
+        product = self.product_repo.create(
+            title="Rated", price="5.00", description="d", image="i"
+        )
+        missing_user_id = self.rating_user_id + 500
+        self.mock_user_objects.filter.return_value.exists.return_value = False
+        result = self.service.delete_user_rating(product.id, user_id=missing_user_id)
+        self.assertEqual(result[0], "NOT_FOUND")
+        self.assertEqual(result[1], "User not found")
+        self.assertIn("userId", result[2])
+        self.mock_user_objects.filter.return_value.exists.return_value = True
 
 
 class CategoryServiceUnitTests(unittest.TestCase):

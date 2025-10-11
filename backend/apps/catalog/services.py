@@ -12,6 +12,7 @@ from .protocols import (
     ProductRepositoryProtocol,
     RatingRepositoryProtocol,
 )
+from apps.users.models import User
 
 logger = get_logger(__name__).bind(component="catalog", layer="service")
 
@@ -223,6 +224,13 @@ class ProductService:
                 user_id=user_id,
             )
             return ("NOT_FOUND", "Product not found", {"id": product_id})
+        if not User.objects.filter(id=user_id).exists():
+            self.logger.warning(
+                "Rating failed: user not found",
+                product_id=product_id,
+                user_id=user_id,
+            )
+            return ("NOT_FOUND", "User not found", {"userId": user_id})
         existing = self.ratings.for_product_user(product_id, user_id)
         if existing:
             existing.value = cmd.value
@@ -253,6 +261,13 @@ class ProductService:
                 user_id=user_id,
             )
             return ("NOT_FOUND", "Product not found", {"id": product_id})
+        if not User.objects.filter(id=user_id).exists():
+            self.logger.warning(
+                "Rating delete failed: user not found",
+                product_id=product_id,
+                user_id=user_id,
+            )
+            return ("NOT_FOUND", "User not found", {"userId": user_id})
         existing = self.ratings.for_product_user(product_id, user_id)
         if not existing:
             # Idempotent delete - still return summary
