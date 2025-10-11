@@ -25,8 +25,10 @@ ERROR_STATUS_MAP = {
 def _normalize_details(details: Any) -> Any:
     if isinstance(details, ValidationError):
         return as_serializer_error(details)
+    if isinstance(details, Mapping):
+        return dict(details)
     if isinstance(details, Exception):
-        return str(details)
+        return {"type": details.__class__.__name__}
     return details
 
 
@@ -39,7 +41,7 @@ def error_response(
     hint: Optional[str] = None,
     extra: Optional[Mapping[str, Any]] = None,
     headers: Optional[Mapping[str, str]] = None,
-):
+) -> Response:
     """
     Return a consistently structured error response for API endpoints.
 
@@ -66,27 +68,34 @@ def error_response(
     if not message:
         raise ValueError("error_response requires a non-empty message")
 
+    normalized_code = code.upper()
+
     status_code = (
         int(http_status)
         if http_status is not None
-        else ERROR_STATUS_MAP.get(code.upper(), DEFAULT_ERROR_STATUS)
+        else ERROR_STATUS_MAP.get(normalized_code, DEFAULT_ERROR_STATUS)
     )
 
     if extra is not None and not isinstance(extra, Mapping):
         raise TypeError("error_response extra must be a mapping if provided")
     if headers is not None and not isinstance(headers, Mapping):
         raise TypeError("error_response headers must be a mapping if provided")
+    if hint is not None and not isinstance(hint, str):
+        raise TypeError("error_response hint must be a string if provided")
+
+    if not 100 <= status_code <= 599:
+        raise ValueError("error_response status must be a valid HTTP status code")
 
     payload: Dict[str, Any] = {
         "error": {
-            "code": code,
+            "code": normalized_code,
             "message": message,
             "status": status_code,
         }
     }
     if details is not None:
         payload["error"]["details"] = _normalize_details(details)
-    if hint:
+    if hint is not None:
         payload["error"]["hint"] = hint
     if extra:
         payload["error"]["extra"] = dict(extra)
