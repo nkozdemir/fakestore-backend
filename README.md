@@ -138,27 +138,36 @@ All error responses use a consistent structure:
   "error": {
     "code": "NOT_FOUND",
     "message": "Product not found",
-    "details": {"id": "999"}
+    "status": 404,
+    "details": {"id": "999"},
+    "hint": "Verify the identifier and retry"
   }
 }
 ```
 Codes:
 | Code | HTTP | Meaning |
 |------|------|---------|
-| NOT_FOUND | 404 | Requested resource missing |
 | VALIDATION_ERROR | 400 | Input validation failed |
+| UNAUTHORIZED | 401 | Authentication required |
+| FORBIDDEN | 403 | Authenticated but not allowed |
+| NOT_FOUND | 404 | Requested resource missing |
+| METHOD_NOT_ALLOWED | 405 | HTTP verb not supported |
+| CONFLICT | 409 | Resource state conflict |
+| UNPROCESSABLE_ENTITY | 422 | Semantically invalid payload |
+| TOO_MANY_REQUESTS | 429 | Rate limit exceeded |
 | SERVER_ERROR | 500 | Unexpected server exception |
+| SERVICE_UNAVAILABLE | 503 | Dependency unavailable |
 
 Examples:
 ```jsonc
 // Missing product
-{"error":{"code":"NOT_FOUND","message":"Product not found","details":{"id":"99999"}}}
+{"error":{"code":"NOT_FOUND","message":"Product not found","status":404,"details":{"id":"99999"}}}
 
 // Bad category IDs
-{"error":{"code":"VALIDATION_ERROR","message":"Some category IDs do not exist","details":{"missing":[999]}}}
+{"error":{"code":"VALIDATION_ERROR","message":"Some category IDs do not exist","status":400,"details":{"missing":[999]}}}
 
 // Invalid quantity in cart patch
-{"error":{"code":"VALIDATION_ERROR","message":"Invalid quantity","details":{"productId":1,"quantity":-5}}}
+{"error":{"code":"VALIDATION_ERROR","message":"Invalid quantity","status":400,"details":{"productId":1,"quantity":-5},"hint":"Ensure quantity is positive"}}
 ```
 
 ## Extending

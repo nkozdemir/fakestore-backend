@@ -76,6 +76,17 @@ class ProductService:
         self.cache.set(key, data)
         return data
 
+    def products_queryset(self, category: Optional[str] = None):
+        """Return a queryset for products with categories prefetched."""
+        self.logger.debug(
+            "Building product queryset for pagination", category=category
+        )
+        return (
+            self.products.list_by_category(category)
+            if category
+            else self.products.list()
+        )
+
     def list_products_by_category_ids(self, category_ids):
         self.logger.debug("Listing products by categories", category_ids=category_ids)
         qs = self.products.list_by_category_ids(category_ids)

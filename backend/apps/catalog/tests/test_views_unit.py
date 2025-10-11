@@ -53,8 +53,15 @@ class CatalogViewsUnitTests(unittest.TestCase):
         dto1 = make_product_dto(1)
         dto2 = make_product_dto(2, title="Gadget")
         service_mock = Mock()
-        service_mock.list_products.return_value = [dto1, dto2]
-        with patch.object(ProductListView, "service", service_mock):
+        service_mock.products_queryset.return_value = ["p1", "p2"]
+
+        def map_side_effect(iterable):
+            items = list(iterable)
+            return [dto1, dto2][: len(items)]
+
+        with patch.object(ProductListView, "service", service_mock), patch(
+            "apps.catalog.views.ProductMapper.many_to_dto", side_effect=map_side_effect
+        ) as mapper_mock:
             request = self.factory.get(
                 "/api/products/", {"limit": 1, "category": "electronics"}
             )
@@ -62,7 +69,10 @@ class CatalogViewsUnitTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["count"], 2)
         self.assertEqual(len(response.data["results"]), 1)
-        service_mock.list_products.assert_called_once_with(category="electronics")
+        service_mock.products_queryset.assert_called_once_with(category="electronics")
+        # Ensure pagination delivered a single item to the mapper
+        paginated_input = mapper_mock.call_args[0][0]
+        self.assertEqual(len(paginated_input), 1)
 
     def test_product_list_post_creates_product(self):
         dto = make_product_dto(3, "Created")

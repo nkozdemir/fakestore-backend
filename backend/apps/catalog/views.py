@@ -14,6 +14,7 @@ from .pagination import ProductListPagination
 from apps.common import get_logger
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse
 from apps.api.schemas import paginated_response, ErrorResponseSerializer
+from .mappers import ProductMapper
 
 logger = get_logger(__name__).bind(component="catalog", layer="view")
 
@@ -41,12 +42,11 @@ class ProductListView(APIView):
     def get(self, request):
         category = request.query_params.get("category")
         self.log.debug("Handling product list request", category=category)
-        # Fetch all DTOs (list of dicts) then paginate the list in-memory
-        data = self.service.list_products(category=category)
+        queryset = self.service.products_queryset(category=category)
         paginator = ProductListPagination()
-        page = paginator.paginate_queryset(data, request, view=self)
-        # Serializer expects DTO instances; pass as instance, not data
-        serializer = ProductReadSerializer(page, many=True)
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        dtos = ProductMapper.many_to_dto(page)
+        serializer = ProductReadSerializer(dtos, many=True)
         return paginator.get_paginated_response(serializer.data)
 
     @extend_schema(

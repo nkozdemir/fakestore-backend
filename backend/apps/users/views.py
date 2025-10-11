@@ -4,7 +4,7 @@ from rest_framework import status
 from .container import build_user_service
 from .serializers import UserSerializer, AddressWriteSerializer, AddressSerializer
 from apps.api.utils import error_response
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated, IsAuthenticatedOrReadOnly
 from django.db import IntegrityError
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from .models import User
@@ -68,9 +68,18 @@ class UserListView(APIView):
 
 @extend_schema(tags=["Users"])
 class UserDetailView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticatedOrReadOnly]
     service = build_user_service()
     log = logger.bind(view="UserDetailView")
+
+    @staticmethod
+    def _ensure_user_access(request, user_id: int):
+        user = getattr(request, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
+            raise PermissionError("unauthenticated")
+        if getattr(user, "id", None) == user_id or getattr(user, "is_staff", False):
+            return
+        raise PermissionError("forbidden")
 
     @extend_schema(
         summary="Get user by ID",
@@ -99,6 +108,16 @@ class UserDetailView(APIView):
         },
     )
     def put(self, request, user_id: int):
+        try:
+            self._ensure_user_access(request, user_id)
+        except PermissionError as exc:
+            if str(exc) == "unauthenticated":
+                self.log.warning("Unauthenticated user replace attempt", user_id=user_id)
+                return error_response("UNAUTHORIZED", "Authentication required")
+            self.log.warning(
+                "User replace forbidden", user_id=user_id, actor_id=getattr(request.user, "id", None)
+            )
+            return error_response("FORBIDDEN", "You do not have permission to modify this user")
         instance = User.objects.filter(id=user_id).first()
         serializer = UserSerializer(instance=instance, data=request.data)
         try:
@@ -137,6 +156,16 @@ class UserDetailView(APIView):
         },
     )
     def patch(self, request, user_id: int):
+        try:
+            self._ensure_user_access(request, user_id)
+        except PermissionError as exc:
+            if str(exc) == "unauthenticated":
+                self.log.warning("Unauthenticated user patch attempt", user_id=user_id)
+                return error_response("UNAUTHORIZED", "Authentication required")
+            self.log.warning(
+                "User patch forbidden", user_id=user_id, actor_id=getattr(request.user, "id", None)
+            )
+            return error_response("FORBIDDEN", "You do not have permission to modify this user")
         instance = User.objects.filter(id=user_id).first()
         serializer = UserSerializer(instance=instance, data=request.data, partial=True)
         try:
@@ -170,6 +199,16 @@ class UserDetailView(APIView):
         responses={204: None, 404: OpenApiResponse(response=ErrorResponseSerializer)},
     )
     def delete(self, request, user_id: int):
+        try:
+            self._ensure_user_access(request, user_id)
+        except PermissionError as exc:
+            if str(exc) == "unauthenticated":
+                self.log.warning("Unauthenticated user delete attempt", user_id=user_id)
+                return error_response("UNAUTHORIZED", "Authentication required")
+            self.log.warning(
+                "User delete forbidden", user_id=user_id, actor_id=getattr(request.user, "id", None)
+            )
+            return error_response("FORBIDDEN", "You do not have permission to modify this user")
         self.log.info("Deleting user via API", user_id=user_id)
         deleted = self.service.delete_user(user_id)
         if not deleted:
@@ -200,6 +239,13 @@ class UserAddressListView(APIView):
             return error_response("UNAUTHORIZED", "Authentication required")
         self.log.debug("Listing addresses for user", user_id=user_id)
         addresses = self.service.list_user_addresses(user_id)
+        if addresses is None:
+            self.log.warning(
+                "Address list failed: user missing", user_id=user_id, reason="user_not_found"
+            )
+            return error_response(
+                "NOT_FOUND", "User not found", {"userId": str(user_id)}, hint="Log in again"
+            )
         return Response(AddressSerializer(addresses, many=True).data)
 
     @extend_schema(
@@ -225,6 +271,18 @@ class UserAddressListView(APIView):
             return error_response("VALIDATION_ERROR", "Invalid input", exc.detail)
         self.log.info("Creating address for user", user_id=user_id)
         dto = self.service.create_user_address(user_id, serializer.validated_data)
+        if dto is None:
+            self.log.warning(
+                "Address creation failed: user missing",
+                user_id=user_id,
+                reason="user_not_found",
+            )
+            return error_response(
+                "NOT_FOUND",
+                "User not found",
+                {"userId": str(user_id)},
+                hint="Log in again",
+            )
         address_id = None
         if dto is not None:
             address_id = getattr(dto, "id", None)

@@ -208,6 +208,21 @@ class CartServiceUnitTests(unittest.TestCase):
         self.assertEqual(updated.items[0].product.id, 2)
         self.assertEqual(updated.items[0].quantity, 3)
 
+    def test_update_cart_metadata_only_preserves_items(self):
+        dto = self.service.create_cart(
+            12,
+            {
+                "products": [
+                    {"productId": 1, "quantity": 2},
+                ],
+                "date": "2024-01-01",
+            },
+        )
+        updated = self.service.update_cart(dto.id, {"date": "2024-02-01"})
+        self.assertEqual(len(updated.items), 1)
+        self.assertEqual(updated.items[0].product.id, 1)
+        self.assertEqual(updated.items[0].quantity, 2)
+
     def test_patch_operations(self):
         dto = self.service.create_cart(
             7,

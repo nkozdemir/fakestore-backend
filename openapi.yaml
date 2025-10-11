@@ -129,7 +129,6 @@ paths:
         required: true
       security:
       - jwtAuth: []
-      - {}
       responses:
         '201':
           content:
@@ -371,7 +370,6 @@ paths:
       - Carts
       security:
       - jwtAuth: []
-      - {}
       responses:
         '200':
           content:
@@ -485,6 +483,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
         '404':
           content:
             application/json:
@@ -517,6 +527,18 @@ paths:
                 $ref: '#/components/schemas/Category'
           description: ''
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
           content:
             application/json:
               schema:
@@ -566,7 +588,6 @@ paths:
       - Catalog
       security:
       - jwtAuth: []
-      - {}
       responses:
         '200':
           content:
@@ -614,7 +635,6 @@ paths:
       - Catalog
       security:
       - jwtAuth: []
-      - {}
       responses:
         '200':
           content:
@@ -655,6 +675,18 @@ paths:
                 $ref: '#/components/schemas/ProductRead'
           description: ''
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
           content:
             application/json:
               schema:
@@ -739,7 +771,6 @@ paths:
       - Ratings
       security:
       - jwtAuth: []
-      - {}
       responses:
         '200':
           content:
@@ -780,6 +811,18 @@ paths:
                 $ref: '#/components/schemas/RatingSummary'
           description: Updated rating summary
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
           content:
             application/json:
               schema:
@@ -840,7 +883,6 @@ paths:
       - Catalog
       security:
       - jwtAuth: []
-      - {}
       responses:
         '200':
           content:
@@ -948,7 +990,6 @@ paths:
         required: true
       security:
       - jwtAuth: []
-      - {}
       responses:
         '200':
           content:
@@ -957,6 +998,18 @@ paths:
                 $ref: '#/components/schemas/User'
           description: ''
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
           content:
             application/json:
               schema:
@@ -986,7 +1039,6 @@ paths:
               $ref: '#/components/schemas/PatchedUserRequest'
       security:
       - jwtAuth: []
-      - {}
       responses:
         '200':
           content:
@@ -995,6 +1047,18 @@ paths:
                 $ref: '#/components/schemas/User'
           description: ''
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
           content:
             application/json:
               schema:
@@ -1019,10 +1083,21 @@ paths:
       - Users
       security:
       - jwtAuth: []
-      - {}
       responses:
         '204':
           description: No response body
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
         '404':
           content:
             application/json:
@@ -1049,6 +1124,12 @@ paths:
                   $ref: '#/components/schemas/Address'
           description: ''
         '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
           content:
             application/json:
               schema:
@@ -1083,6 +1164,12 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
         '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
           content:
             application/json:
               schema:
@@ -1466,10 +1553,20 @@ components:
           type: string
         message:
           type: string
+        status:
+          type: integer
+          minimum: 100
+          maximum: 599
         details: {}
+        hint:
+          type: string
+        extra:
+          type: object
+          additionalProperties: {}
       required:
       - code
       - message
+      - status
     ErrorResponse:
       type: object
       properties:

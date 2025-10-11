@@ -158,6 +158,18 @@ class UserViewsUnitTests(unittest.TestCase):
         self.address_write_patch.stop()
         self.address_serializer_patch.stop()
 
+    @staticmethod
+    def _make_user(user_id=1, *, staff=False):
+        return type(
+            "User",
+            (),
+            {
+                "id": user_id,
+                "is_authenticated": True,
+                "is_staff": staff,
+            },
+        )()
+
     def test_user_list_get_returns_service_data(self):
         self.service.list_result = [{"id": 1}]
         view = UserListView()
@@ -198,12 +210,13 @@ class UserViewsUnitTests(unittest.TestCase):
 
         # Delete success
         self.service.delete_result = True
-        delete_resp = view.delete(DummyRequest(), user_id=1)
+        delete_req = DummyRequest(user=self._make_user(1))
+        delete_resp = view.delete(delete_req, user_id=1)
         self.assertEqual(delete_resp.status_code, status.HTTP_204_NO_CONTENT)
 
         # Delete not found
         self.service.delete_result = False
-        delete_missing = view.delete(DummyRequest(), user_id=2)
+        delete_missing = view.delete(DummyRequest(user=self._make_user(2)), user_id=2)
         self.assertEqual(delete_missing.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_user_detail_put_success(self):
@@ -212,7 +225,10 @@ class UserViewsUnitTests(unittest.TestCase):
         self.service.update_result = {"id": 1, "username": "updated"}
         with patch("apps.users.views.User") as mock_user_cls:
             mock_user_cls.objects.filter.return_value.first.return_value = object()
-            response = view.put(DummyRequest({"username": "updated"}), user_id=1)
+            response = view.put(
+                DummyRequest({"username": "updated"}, user=self._make_user(1)),
+                user_id=1,
+            )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         user_id, payload = self.service.last_update_payload
         self.assertEqual(user_id, 1)
@@ -223,7 +239,9 @@ class UserViewsUnitTests(unittest.TestCase):
         view.service = self.service
         with patch("apps.users.views.User") as mock_user_cls:
             mock_user_cls.objects.filter.return_value.first.return_value = object()
-            response = view.patch(DummyRequest({"__invalid": True}), user_id=1)
+            response = view.patch(
+                DummyRequest({"__invalid": True}, user=self._make_user(1)), user_id=1
+            )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_user_address_list_post_requires_auth(self):

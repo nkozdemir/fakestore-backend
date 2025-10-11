@@ -124,7 +124,7 @@ class CartUpdateCommand:
     cart_id: int
     user_id: Optional[int]
     date: Optional[date]
-    items: List[CartItemCommand]
+    items: Optional[List[CartItemCommand]] = None
 
     @staticmethod
     def from_raw(cart_id: int, payload: Dict[str, Any]):
@@ -135,12 +135,15 @@ class CartUpdateCommand:
             user_id = int(user_id) if user_id is not None else None
         except (ValueError, TypeError):
             user_id = None
-        items_raw = payload.get("items") or []
-        items: List[CartItemCommand] = []
-        for r in items_raw:
-            cmd = CartItemCommand.from_raw(r)
-            if cmd:
-                items.append(cmd)
+        items: Optional[List[CartItemCommand]] = None
+        if "items" in payload:
+            items_raw = payload.get("items") or []
+            parsed: List[CartItemCommand] = []
+            for r in items_raw:
+                cmd = CartItemCommand.from_raw(r)
+                if cmd:
+                    parsed.append(cmd)
+            items = parsed
         raw_date = payload.get("date")
         d = CartCreateCommand._normalize_date(raw_date) if raw_date else None
         return CartUpdateCommand(cart_id=cart_id, user_id=user_id, date=d, items=items)

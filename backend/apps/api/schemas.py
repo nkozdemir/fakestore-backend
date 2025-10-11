@@ -5,7 +5,10 @@ from rest_framework import serializers
 class ErrorDetailSerializer(serializers.Serializer):
     code = serializers.CharField()
     message = serializers.CharField()
+    status = serializers.IntegerField()
     details = serializers.JSONField(required=False)
+    hint = serializers.CharField(required=False, allow_blank=True)
+    extra = serializers.JSONField(required=False)
 
 
 class ErrorResponseSerializer(serializers.Serializer):
