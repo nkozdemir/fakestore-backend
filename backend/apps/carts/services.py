@@ -95,11 +95,7 @@ class CartService:
         with transaction.atomic():
             self.carts.update_scalar(cart, user_id=command.user_id, date=command.date)
             if command.items is not None:
-                raw_items = [
-                    {"productId": item.product_id, "quantity": item.quantity}
-                    for item in command.items
-                ]
-                self._rebuild_items(cart, raw_items)
+                self._rebuild_items(cart, command.items)
         refreshed = self.carts.get(id=cart_id)
         self.logger.info("Cart updated", cart_id=cart_id, user_id=user_id)
         return self.cart_mapper.to_dto(refreshed) if refreshed else None
@@ -150,22 +146,19 @@ class CartService:
         self.logger.info("Cart patch applied", cart_id=cart_id, user_id=user_id)
         return self.cart_mapper.to_dto(refreshed) if refreshed else None
 
-    def _rebuild_items(self, cart: Cart, raw_items: List[Dict[str, Any]]):
+    def _rebuild_items(self, cart: Cart, items: List[CartItemCommand]):
         self.cart_products.delete_for_cart(cart)
-        for raw in raw_items:
-            command = CartItemCommand.from_raw(raw)
-            if not command:
-                continue
-            product = self.products.get(id=command.product_id)
+        for item in items:
+            product = self.products.get(id=item.product_id)
             if not product:
                 self.logger.warning(
                     "Skipping missing product during cart rebuild",
                     cart_id=cart.id,
-                    product_id=command.product_id,
+                    product_id=item.product_id,
                 )
                 continue
             self.cart_products.create(
-                cart=cart, product=product, quantity=command.quantity
+                cart=cart, product=product, quantity=item.quantity
             )
 
     def _update_cart_metadata(self, cart: Cart, new_date, new_user_id):

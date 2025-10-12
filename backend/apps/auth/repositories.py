@@ -17,8 +17,5 @@ class DjangoUserRegistrationRepository(UserRegistrationRepositoryProtocol):
     def email_exists(self, email: str) -> bool:
         return self.model.objects.filter(email=email).exists()
 
-    def supports_field(self, field_name: str) -> bool:
-        return hasattr(self.model, field_name)
-
     def create_user(self, **data: Any):
         return self.model.objects.create(**data)

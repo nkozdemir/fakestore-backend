@@ -216,48 +216,98 @@ PRODUCTS = [
 ]
 
 USERS = [
-    (1, "john", "doe", "john@gmail.com", "johnd", "m38rmF$", "1-570-236-7033"),
-    (
-        2,
-        "david",
-        "morrison",
-        "morrison@gmail.com",
-        "mor_2314",
-        "83r5^_",
-        "1-570-236-7033",
-    ),
-    (3, "kevin", "ryan", "kevin@gmail.com", "kevinryan", "kev02937@", "1-567-094-1345"),
-    (4, "don", "romer", "don@gmail.com", "donero", "ewedon", "1-765-789-6734"),
-    (5, "derek", "powell", "derek@gmail.com", "derek", "jklg*_56", "1-956-001-1945"),
-    (
-        6,
-        "david",
-        "russell",
-        "david_r@gmail.com",
-        "david_r",
-        "3478*#54",
-        "1-678-345-9856",
-    ),
-    (7, "miriam", "snyder", "miriam@gmail.com", "snyder", "f238&@*$", "1-123-943-0563"),
-    (
-        8,
-        "william",
-        "hopkins",
-        "william@gmail.com",
-        "hopkins",
-        "William56$hj",
-        "1-478-001-0890",
-    ),
-    (9, "kate", "hale", "kate@gmail.com", "kate_h", "kfejk@*_", "1-678-456-1934"),
-    (
-        10,
-        "jimmie",
-        "klein",
-        "jimmie@gmail.com",
-        "jimmie_k",
-        "klein*#%*",
-        "1-104-001-4567",
-    ),
+    {
+        "id": 1,
+        "first_name": "john",
+        "last_name": "doe",
+        "email": "john@gmail.com",
+        "username": "johnd",
+        "password": "m38rmF$",
+        "phone": "1-570-236-7033",
+        "is_superuser": True,
+    },
+    {
+        "id": 2,
+        "first_name": "david",
+        "last_name": "morrison",
+        "email": "morrison@gmail.com",
+        "username": "mor_2314",
+        "password": "83r5^_",
+        "phone": "1-570-236-7033",
+        "is_staff": True,
+    },
+    {
+        "id": 3,
+        "first_name": "kevin",
+        "last_name": "ryan",
+        "email": "kevin@gmail.com",
+        "username": "kevinryan",
+        "password": "kev02937@",
+        "phone": "1-567-094-1345",
+    },
+    {
+        "id": 4,
+        "first_name": "don",
+        "last_name": "romer",
+        "email": "don@gmail.com",
+        "username": "donero",
+        "password": "ewedon",
+        "phone": "1-765-789-6734",
+    },
+    {
+        "id": 5,
+        "first_name": "derek",
+        "last_name": "powell",
+        "email": "derek@gmail.com",
+        "username": "derek",
+        "password": "jklg*_56",
+        "phone": "1-956-001-1945",
+    },
+    {
+        "id": 6,
+        "first_name": "david",
+        "last_name": "russell",
+        "email": "david_r@gmail.com",
+        "username": "david_r",
+        "password": "3478*#54",
+        "phone": "1-678-345-9856",
+    },
+    {
+        "id": 7,
+        "first_name": "miriam",
+        "last_name": "snyder",
+        "email": "miriam@gmail.com",
+        "username": "snyder",
+        "password": "f238&@*$",
+        "phone": "1-123-943-0563",
+    },
+    {
+        "id": 8,
+        "first_name": "william",
+        "last_name": "hopkins",
+        "email": "william@gmail.com",
+        "username": "hopkins",
+        "password": "William56$hj",
+        "phone": "1-478-001-0890",
+    },
+    {
+        "id": 9,
+        "first_name": "kate",
+        "last_name": "hale",
+        "email": "kate@gmail.com",
+        "username": "kate_h",
+        "password": "kfejk@*_",
+        "phone": "1-678-456-1934",
+    },
+    {
+        "id": 10,
+        "first_name": "jimmie",
+        "last_name": "klein",
+        "email": "jimmie@gmail.com",
+        "username": "jimmie_k",
+        "password": "klein*#%*",
+        "phone": "1-104-001-4567",
+    },
 ]
 
 ADDRESSES = [
@@ -362,24 +412,28 @@ class Command(BaseCommand):
                 )
 
         self.stdout.write("Seeding users...")
-        for uid, fn, ln, email, username, pwd, phone in USERS:
-            user, created = User.objects.get_or_create(
-                id=uid,
-                defaults=dict(
-                    firstname=fn,
-                    lastname=ln,
-                    email=email,
-                    username=username,
-                    phone=phone,
-                ),
-            )
-            if created:
-                user.set_password(pwd)
-                user.save()
-            else:
-                # If user exists, update password to ensure it's hashed
-                user.set_password(pwd)
-                user.save()
+        for payload in USERS:
+            attrs = dict(payload)
+            user_id = attrs.pop("id")
+            raw_password = attrs.pop("password")
+            is_superuser = attrs.get("is_superuser", False)
+            # Superusers must also be staff
+            is_staff = attrs.get("is_staff", False) or is_superuser
+            defaults = {
+                "first_name": attrs["first_name"],
+                "last_name": attrs["last_name"],
+                "email": attrs["email"],
+                "username": attrs["username"],
+                "phone": attrs.get("phone"),
+                "is_staff": is_staff,
+                "is_superuser": is_superuser,
+            }
+            user, created = User.objects.get_or_create(id=user_id, defaults=defaults)
+            if not created:
+                for field, value in defaults.items():
+                    setattr(user, field, value)
+            user.set_password(raw_password)
+            user.save()
 
         # Important: After inserting explicit IDs, reset the user ID sequence so
         # future inserts (e.g., via the API) don't try to reuse an existing PK.

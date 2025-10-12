@@ -12,12 +12,7 @@ class CartItemCommand:
     def from_raw(raw: Dict[str, Any]):
         if not isinstance(raw, dict):
             return None
-        pid = raw.get("productId") or raw.get("product_id")
-        if pid is None:
-            # nested product object fallback
-            product = raw.get("product")
-            if isinstance(product, dict):
-                pid = product.get("id")
+        pid = raw.get("product_id")
         try:
             pid = int(pid) if pid is not None else None
         except (ValueError, TypeError):
@@ -140,9 +135,20 @@ class CartUpdateCommand:
             items_raw = payload.get("items") or []
             parsed: List[CartItemCommand] = []
             for r in items_raw:
-                cmd = CartItemCommand.from_raw(r)
-                if cmd:
-                    parsed.append(cmd)
+                if not isinstance(r, dict):
+                    continue
+                product_id = r.get("product_id")
+                quantity = r.get("quantity")
+                try:
+                    product_id = int(product_id)
+                    quantity = int(quantity)
+                except (ValueError, TypeError):
+                    continue
+                if product_id <= 0 or quantity <= 0:
+                    continue
+                parsed.append(
+                    CartItemCommand(product_id=product_id, quantity=quantity)
+                )
             items = parsed
         raw_date = payload.get("date")
         d = CartCreateCommand._normalize_date(raw_date) if raw_date else None

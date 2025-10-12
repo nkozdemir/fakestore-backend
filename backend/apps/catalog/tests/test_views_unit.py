@@ -84,7 +84,9 @@ class CatalogViewsUnitTests(unittest.TestCase):
             "description": "New item",
             "image": "img",
         }
-        user = types.SimpleNamespace(id=1, is_authenticated=True)
+        user = types.SimpleNamespace(
+            id=1, is_authenticated=True, is_staff=True, is_superuser=False
+        )
         with patch.object(ProductListView, "service", service_mock):
             request = self.factory.post("/api/products/", payload, format="json")
             self.authenticate(request, user)
@@ -94,6 +96,24 @@ class CatalogViewsUnitTests(unittest.TestCase):
         args, kwargs = service_mock.create_product.call_args
         self.assertEqual(args[0]["title"], "Created")
         self.assertEqual(args[0]["price"], Decimal("12.50"))
+
+    def test_product_list_post_forbidden_for_non_admin(self):
+        service_mock = Mock()
+        payload = {
+            "title": "Created",
+            "price": "12.50",
+            "description": "New item",
+            "image": "img",
+        }
+        user = types.SimpleNamespace(
+            id=50, is_authenticated=True, is_staff=False, is_superuser=False
+        )
+        with patch.object(ProductListView, "service", service_mock):
+            request = self.factory.post("/api/products/", payload, format="json")
+            self.authenticate(request, user)
+            response = self.dispatch(request, ProductListView)
+        self.assertEqual(response.status_code, 403)
+        service_mock.create_product.assert_not_called()
 
     def test_product_detail_get_not_found(self):
         service_mock = Mock()
@@ -123,7 +143,9 @@ class CatalogViewsUnitTests(unittest.TestCase):
             "description": "Desc",
             "image": "img",
         }
-        user = types.SimpleNamespace(id=2, is_authenticated=True)
+        user = types.SimpleNamespace(
+            id=2, is_authenticated=True, is_staff=True, is_superuser=False
+        )
         with patch.object(ProductDetailView, "service", service_mock):
             request = self.factory.put("/api/products/1/", payload, format="json")
             self.authenticate(request, user)
@@ -134,7 +156,9 @@ class CatalogViewsUnitTests(unittest.TestCase):
     def test_product_detail_delete_success(self):
         service_mock = Mock()
         service_mock.delete_product.return_value = True
-        user = types.SimpleNamespace(id=3, is_authenticated=True)
+        user = types.SimpleNamespace(
+            id=3, is_authenticated=True, is_staff=True, is_superuser=False
+        )
         with patch.object(ProductDetailView, "service", service_mock):
             request = self.factory.delete("/api/products/2/")
             self.authenticate(request, user)
@@ -144,7 +168,9 @@ class CatalogViewsUnitTests(unittest.TestCase):
     def test_product_detail_delete_not_found(self):
         service_mock = Mock()
         service_mock.delete_product.return_value = False
-        user = types.SimpleNamespace(id=9, is_authenticated=True)
+        user = types.SimpleNamespace(
+            id=9, is_authenticated=True, is_staff=True, is_superuser=False
+        )
         with patch.object(ProductDetailView, "service", service_mock):
             request = self.factory.delete("/api/products/8/")
             self.authenticate(request, user)
@@ -152,10 +178,24 @@ class CatalogViewsUnitTests(unittest.TestCase):
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.data["detail"], "Not found")
 
+    def test_product_detail_delete_forbidden_for_non_admin(self):
+        service_mock = Mock()
+        user = types.SimpleNamespace(
+            id=13, is_authenticated=True, is_staff=False, is_superuser=False
+        )
+        with patch.object(ProductDetailView, "service", service_mock):
+            request = self.factory.delete("/api/products/4/")
+            self.authenticate(request, user)
+            response = self.dispatch(request, ProductDetailView, product_id=4)
+        self.assertEqual(response.status_code, 403)
+        service_mock.delete_product.assert_not_called()
+
     def test_product_detail_patch_returns_404_when_missing(self):
         service_mock = Mock()
         service_mock.get_product.return_value = None
-        user = types.SimpleNamespace(id=4, is_authenticated=True)
+        user = types.SimpleNamespace(
+            id=4, is_authenticated=True, is_staff=True, is_superuser=False
+        )
         with patch.object(ProductDetailView, "service", service_mock):
             request = self.factory.patch(
                 "/api/products/3/", {"title": "New"}, format="json"
@@ -175,7 +215,9 @@ class CatalogViewsUnitTests(unittest.TestCase):
             "description": "Desc",
             "image": "img",
         }
-        user = types.SimpleNamespace(id=11, is_authenticated=True)
+        user = types.SimpleNamespace(
+            id=11, is_authenticated=True, is_staff=True, is_superuser=False
+        )
         with patch.object(ProductDetailView, "service", service_mock):
             request = self.factory.put("/api/products/6/", payload, format="json")
             self.authenticate(request, user)
@@ -183,13 +225,33 @@ class CatalogViewsUnitTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["title"], "Updated")
 
+    def test_product_detail_put_forbidden_for_non_admin(self):
+        service_mock = Mock()
+        payload = {
+            "title": "Updated",
+            "price": "15.00",
+            "description": "Desc",
+            "image": "img",
+        }
+        user = types.SimpleNamespace(
+            id=15, is_authenticated=True, is_staff=False, is_superuser=False
+        )
+        with patch.object(ProductDetailView, "service", service_mock):
+            request = self.factory.put("/api/products/6/", payload, format="json")
+            self.authenticate(request, user)
+            response = self.dispatch(request, ProductDetailView, product_id=6)
+        self.assertEqual(response.status_code, 403)
+        service_mock.update_product.assert_not_called()
+
     def test_product_detail_patch_success(self):
         original = make_product_dto(7, "Original")
         updated = make_product_dto(7, "Patched")
         service_mock = Mock()
         service_mock.get_product.return_value = original
         service_mock.update_product.return_value = updated
-        user = types.SimpleNamespace(id=12, is_authenticated=True)
+        user = types.SimpleNamespace(
+            id=12, is_authenticated=True, is_staff=True, is_superuser=False
+        )
         with patch.object(ProductDetailView, "service", service_mock):
             request = self.factory.patch(
                 "/api/products/7/", {"title": "Patched"}, format="json"

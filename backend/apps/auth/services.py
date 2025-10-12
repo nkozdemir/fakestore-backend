@@ -20,16 +20,9 @@ class RegistrationService:
             "username": data["username"].strip(),
             "email": data["email"].strip(),
             "password": make_password(data["password"]),
+            "first_name": data.get("first_name", "").strip(),
+            "last_name": data.get("last_name", "").strip(),
         }
-        optional = {
-            "first_name": data.get("first_name", ""),
-            "last_name": data.get("last_name", ""),
-        }
-        payload.update(optional)
-        if self.users.supports_field("firstname"):
-            payload["firstname"] = optional["first_name"]
-        if self.users.supports_field("lastname"):
-            payload["lastname"] = optional["last_name"]
         return payload
 
     def _check_uniqueness(self, username: str, email: str) -> Optional[tuple]:

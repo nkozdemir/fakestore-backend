@@ -4,7 +4,12 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from .container import build_cart_service
-from .serializers import CartReadSerializer, CartWriteSerializer, CartCreateSerializer
+from .serializers import (
+    CartReadSerializer,
+    CartWriteSerializer,
+    CartCreateSerializer,
+    CartItemWriteSerializer,
+)
 from apps.api.utils import error_response
 from rest_framework import serializers
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
@@ -16,8 +21,8 @@ logger = get_logger(__name__).bind(component="carts", layer="view")
 
 
 class CartPatchSerializer(serializers.Serializer):
-    add = serializers.ListField(child=serializers.DictField(), required=False)
-    update = serializers.ListField(child=serializers.DictField(), required=False)
+    add = CartItemWriteSerializer(many=True, required=False)
+    update = CartItemWriteSerializer(many=True, required=False)
     remove = serializers.ListField(child=serializers.IntegerField(), required=False)
     date = serializers.CharField(required=False)
     userId = serializers.IntegerField(required=False)
@@ -74,7 +79,8 @@ class CartListView(APIView):
         summary="Create cart",
         description=(
             "Creates a new cart for the authenticated user. The user is derived from the JWT in the "
-            "Authorization header; do not include userId in the request body. Optionally include initial "
+            "Authorization header. Regular users should not include userId in the request body; staff or "
+            "superusers may specify userId to create carts for other users. Optionally include initial "
             "products to seed line items."
         ),
         request=CartCreateSerializer,
@@ -91,12 +97,40 @@ class CartListView(APIView):
         if user_id is None:
             self.log.warning("Unauthorized cart creation attempt")
             return error_response("UNAUTHORIZED", "Authentication required")
-        self.log.info("Creating cart via API", user_id=user_id)
-        dto = self.service.create_cart(int(user_id), serializer.validated_data)
+        is_privileged = bool(getattr(request, "is_privileged_user", False))
+        payload = dict(serializer.validated_data)
+        target_user_id = user_id
+        if is_privileged and "userId" in serializer.validated_data:
+            raw_user_id = serializer.validated_data.get("userId")
+            try:
+                target_user_id = int(raw_user_id)
+            except (TypeError, ValueError):
+                self.log.warning(
+                    "Invalid userId provided for cart creation",
+                    raw_value=raw_user_id,
+                )
+                return error_response(
+                    "VALIDATION_ERROR",
+                    "userId must be an integer",
+                    {"userId": raw_user_id},
+                )
+        payload.pop("userId", None)
+        self.log.info(
+            "Creating cart via API",
+            user_id=target_user_id,
+            actor_id=user_id,
+            privileged=is_privileged,
+        )
+        dto = self.service.create_cart(int(target_user_id), payload)
         cart_id = getattr(dto, "id", None)
         if cart_id is None and isinstance(dto, dict):
             cart_id = dto.get("id")
-        self.log.info("Cart created via API", cart_id=cart_id, user_id=user_id)
+        self.log.info(
+            "Cart created via API",
+            cart_id=cart_id,
+            user_id=target_user_id,
+            actor_id=user_id,
+        )
         return Response(CartReadSerializer(dto).data, status=status.HTTP_201_CREATED)
 
 
@@ -126,8 +160,9 @@ class CartDetailView(APIView):
     @extend_schema(
         summary="Replace cart",
         description=(
-            "Replaces the cart. Requires authentication and only the owner can update their cart. "
-            "If unauthenticated, returns 401. If the cart does not exist or does not belong to the current user, returns 404."
+            "Replaces the cart. Requires authentication and only the owner can update their cart unless they are "
+            "staff or superuser. If unauthenticated, returns 401. If the cart does not exist or the actor lacks "
+            "permission, returns 404 or 403 respectively."
         ),
         request=CartWriteSerializer,
         responses={
@@ -142,15 +177,38 @@ class CartDetailView(APIView):
         if user_id is None:
             self.log.warning("Unauthorized cart replace attempt", cart_id=cart_id)
             return error_response("UNAUTHORIZED", "Authentication required")
+        is_privileged = bool(getattr(request, "is_privileged_user", False))
+        actor_id = int(user_id)
         serializer = CartWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        self.log.info("Replacing cart", cart_id=cart_id, user_id=user_id)
+        if not is_privileged:
+            desired_user_id = serializer.validated_data.get("user_id")
+            if desired_user_id is not None and int(desired_user_id) != actor_id:
+                self.log.warning(
+                    "Forbidden cart reassignment attempt",
+                    cart_id=cart_id,
+                    actor_id=actor_id,
+                    desired_user_id=desired_user_id,
+                )
+                return error_response(
+                    "FORBIDDEN", "You do not have permission to reassign this cart"
+                )
+        scope_user_id: Optional[int] = None if is_privileged else actor_id
+        self.log.info(
+            "Replacing cart",
+            cart_id=cart_id,
+            actor_id=actor_id,
+            scoped_user_id=scope_user_id,
+        )
         dto = self.service.update_cart(
-            cart_id, serializer.validated_data, user_id=user_id
+            cart_id, serializer.validated_data, user_id=scope_user_id
         )
         if not dto:
             self.log.warning(
-                "Cart replace failed: not found", cart_id=cart_id, user_id=user_id
+                "Cart replace failed: not found",
+                cart_id=cart_id,
+                actor_id=actor_id,
+                scoped_user_id=scope_user_id,
             )
             return error_response("NOT_FOUND", "Cart not found", {"id": str(cart_id)})
         return Response(CartReadSerializer(dto).data)
@@ -158,8 +216,9 @@ class CartDetailView(APIView):
     @extend_schema(
         summary="Patch cart items",
         description=(
-            "Applies add/update/remove item operations. Requires authentication and only the owner can patch their cart. "
-            "If unauthenticated, returns 401. If the cart does not exist or does not belong to the current user, returns 404."
+            "Applies add/update/remove item operations. Requires authentication and only the owner can patch their cart "
+            "unless they are staff or superuser. If unauthenticated, returns 401. If the cart does not exist or the actor "
+            "lacks permission, returns 404 or 403 respectively."
         ),
         request=CartPatchSerializer,
         responses={
@@ -174,16 +233,39 @@ class CartDetailView(APIView):
         if user_id is None:
             self.log.warning("Unauthorized cart patch attempt", cart_id=cart_id)
             return error_response("UNAUTHORIZED", "Authentication required")
+        is_privileged = bool(getattr(request, "is_privileged_user", False))
+        actor_id = int(user_id)
         # Interpret patch operations for cart items
         ops_serializer = CartPatchSerializer(data=request.data)
         ops_serializer.is_valid(raise_exception=True)
-        self.log.info("Applying cart patch", cart_id=cart_id, user_id=user_id)
+        if not is_privileged:
+            desired_user_id = ops_serializer.validated_data.get("userId")
+            if desired_user_id is not None and int(desired_user_id) != actor_id:
+                self.log.warning(
+                    "Forbidden cart reassignment patch",
+                    cart_id=cart_id,
+                    actor_id=actor_id,
+                    desired_user_id=desired_user_id,
+                )
+                return error_response(
+                    "FORBIDDEN", "You do not have permission to reassign this cart"
+                )
+        scope_user_id: Optional[int] = None if is_privileged else actor_id
+        self.log.info(
+            "Applying cart patch",
+            cart_id=cart_id,
+            actor_id=actor_id,
+            scoped_user_id=scope_user_id,
+        )
         dto = self.service.patch_operations(
-            cart_id, ops_serializer.validated_data, user_id=user_id
+            cart_id, ops_serializer.validated_data, user_id=scope_user_id
         )
         if not dto:
             self.log.warning(
-                "Cart patch failed: not found", cart_id=cart_id, user_id=user_id
+                "Cart patch failed: not found",
+                cart_id=cart_id,
+                actor_id=actor_id,
+                scoped_user_id=scope_user_id,
             )
             return error_response("NOT_FOUND", "Cart not found", {"id": str(cart_id)})
         return Response(CartReadSerializer(dto).data)
@@ -191,9 +273,9 @@ class CartDetailView(APIView):
     @extend_schema(
         summary="Delete cart",
         description=(
-            "Deletes a cart. Requires authentication; only the owner (derived from the JWT in the Authorization "
-            "header) can delete their cart. If unauthenticated, returns 401. If the cart does not exist or does "
-            "not belong to the current user, returns 404."
+            "Deletes a cart. Requires authentication; only the owner can delete their cart unless they are staff or "
+            "superuser. If unauthenticated, returns 401. If the cart does not exist or the actor lacks permission, "
+            "returns 404 or 403 respectively."
         ),
         responses={
             204: None,
@@ -206,11 +288,22 @@ class CartDetailView(APIView):
         if user_id is None:
             self.log.warning("Unauthorized cart delete attempt", cart_id=cart_id)
             return error_response("UNAUTHORIZED", "Authentication required")
-        self.log.info("Deleting cart via API", cart_id=cart_id, user_id=user_id)
-        deleted = self.service.delete_cart(cart_id, user_id=user_id)
+        is_privileged = bool(getattr(request, "is_privileged_user", False))
+        actor_id = int(user_id)
+        scope_user_id: Optional[int] = None if is_privileged else actor_id
+        self.log.info(
+            "Deleting cart via API",
+            cart_id=cart_id,
+            actor_id=actor_id,
+            scoped_user_id=scope_user_id,
+        )
+        deleted = self.service.delete_cart(cart_id, user_id=scope_user_id)
         if not deleted:
             self.log.warning(
-                "Cart delete failed: not found", cart_id=cart_id, user_id=user_id
+                "Cart delete failed: not found",
+                cart_id=cart_id,
+                actor_id=actor_id,
+                scoped_user_id=scope_user_id,
             )
             return error_response("NOT_FOUND", "Cart not found", {"id": str(cart_id)})
         return Response(status=status.HTTP_204_NO_CONTENT)

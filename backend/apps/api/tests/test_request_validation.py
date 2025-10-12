@@ -11,6 +11,8 @@ from apps.api.utils import error_response
 from apps.catalog.views import (
     ProductByCategoriesView,
     ProductRatingView,
+    ProductListView,
+    ProductDetailView,
     CategoryListView,
     CategoryDetailView,
 )
@@ -217,6 +219,63 @@ def test_validate_request_user_address_allows_superuser():
     )
     assert response is None
     assert getattr(request, "validated_user_id") == 1
+
+
+def test_validate_request_product_post_requires_auth():
+    request = factory.post("/api/products/", {"title": "X"}, format="json")
+    response = validate_request_context(request, ProductListView, {})
+    assert response.status_code == 401
+
+
+def test_validate_request_product_post_forbidden_for_non_admin():
+    request = factory.post("/api/products/", {"title": "X"}, format="json")
+    request.user = types.SimpleNamespace(
+        id=7, is_authenticated=True, is_staff=False, is_superuser=False
+    )
+    response = validate_request_context(request, ProductListView, {})
+    assert response.status_code == 403
+
+
+def test_validate_request_product_post_allows_admin():
+    request = factory.post("/api/products/", {"title": "X"}, format="json")
+    request.user = types.SimpleNamespace(
+        id=8, is_authenticated=True, is_staff=True, is_superuser=False
+    )
+    response = validate_request_context(request, ProductListView, {})
+    assert response is None
+    assert getattr(request, "validated_user_id") == 8
+
+
+def test_validate_request_product_detail_forbidden_for_non_admin():
+    request = factory.patch("/api/products/1/", {"title": "New"}, format="json")
+    request.user = types.SimpleNamespace(
+        id=9, is_authenticated=True, is_staff=False, is_superuser=False
+    )
+    response = validate_request_context(
+        request, ProductDetailView, {"product_id": 1}
+    )
+    assert response.status_code == 403
+
+
+def test_validate_request_product_detail_allows_admin():
+    request = factory.delete("/api/products/1/")
+    request.user = types.SimpleNamespace(
+        id=10, is_authenticated=True, is_staff=True, is_superuser=False
+    )
+    response = validate_request_context(
+        request, ProductDetailView, {"product_id": 1}
+    )
+    assert response is None
+    assert getattr(request, "validated_user_id") == 10
+
+
+def test_validate_request_user_post_forbidden_when_authenticated_non_admin():
+    request = factory.post("/api/users/", {"username": "new"}, format="json")
+    request.user = types.SimpleNamespace(
+        id=11, is_authenticated=True, is_staff=False, is_superuser=False
+    )
+    response = validate_request_context(request, UserListView, {})
+    assert response.status_code == 403
 
 
 @patch("apps.api.validation.User.objects")

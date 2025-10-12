@@ -85,8 +85,11 @@ class MeView(APIView):
                 "id": user.id,
                 "username": user.username,
                 "email": user.email,
-                "firstname": getattr(user, "firstname", ""),
-                "lastname": getattr(user, "lastname", ""),
+                "first_name": getattr(user, "first_name", ""),
+                "last_name": getattr(user, "last_name", ""),
+                "last_login": user.last_login.isoformat()
+                if getattr(user, "last_login", None)
+                else None,
                 "is_staff": user.is_staff,
                 "is_superuser": user.is_superuser,
             }

@@ -13,16 +13,12 @@ class FakeUserRepository:
         self._existing_usernames = set()
         self._existing_emails = set()
         self._created_payloads = []
-        self._supports_fields = {"firstname", "lastname"}
 
     def username_exists(self, username: str) -> bool:
         return username in self._existing_usernames
 
     def email_exists(self, email: str) -> bool:
         return email in self._existing_emails
-
-    def supports_field(self, field_name: str) -> bool:
-        return field_name in self._supports_fields
 
     def create_user(self, **data):
         payload = dict(data)

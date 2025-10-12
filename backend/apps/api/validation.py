@@ -43,12 +43,15 @@ def _is_authenticated_user(request: HttpRequest) -> bool:
     # Mirror DRF's behaviour so downstream consumers see the authenticated user.
     request.user = user
     request.auth = token
+    request.is_privileged_user = _is_privileged_user(user)
     logger.debug("Authenticated user from bearer token", user_id=user.id)
     return True
 
 
 def _set_validated_user(request: HttpRequest, user_id: Optional[int]) -> None:
     request.validated_user_id = user_id
+    if hasattr(request, "user"):
+        request.is_privileged_user = _is_privileged_user(getattr(request, "user", None))
 
 
 def _is_privileged_user(user: Any) -> bool:
@@ -206,6 +209,15 @@ def validate_request_context(request: HttpRequest, view_class, view_kwargs) -> A
             logger.warning("ProductByCategoriesView validation failed")
             return resp
     elif view_name == "UserListView":
+        if request.method in ("POST",):
+            if _is_authenticated_user(request) and not _is_privileged_user(request.user):
+                logger.warning(
+                    "Authenticated non-admin attempted user create",
+                    user_id=getattr(request.user, "id", None),
+                )
+                return error_response(
+                    "FORBIDDEN", "You do not have permission to create users"
+                )
         if request.method in ("POST", "PUT", "PATCH"):
             result = _validate_user_uniqueness(request)
             if result:
@@ -225,6 +237,21 @@ def validate_request_context(request: HttpRequest, view_class, view_kwargs) -> A
                 return error_response(
                     "FORBIDDEN",
                     "You do not have permission to manage categories",
+                )
+    elif view_name == "ProductListView":
+        if request.method in ("POST",):
+            if not _is_authenticated_user(request):
+                logger.warning("ProductListView POST requires authentication")
+                return error_response("UNAUTHORIZED", "Authentication required")
+            _set_validated_user(request, int(request.user.id))
+            if not _is_privileged_user(request.user):
+                logger.warning(
+                    "ProductListView POST forbidden",
+                    user_id=request.user.id,
+                )
+                return error_response(
+                    "FORBIDDEN",
+                    "You do not have permission to manage products",
                 )
     elif view_name == "UserDetailView":
         if request.method in ("PUT", "PATCH"):
@@ -251,6 +278,26 @@ def validate_request_context(request: HttpRequest, view_class, view_kwargs) -> A
                 return error_response(
                     "FORBIDDEN",
                     "You do not have permission to manage categories",
+                )
+    elif view_name == "ProductDetailView":
+        if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+            # POST not used here but keep symmetrical
+            if not _is_authenticated_user(request):
+                logger.warning(
+                    "ProductDetailView modification requires authentication",
+                    method=request.method,
+                )
+                return error_response("UNAUTHORIZED", "Authentication required")
+            _set_validated_user(request, int(request.user.id))
+            if not _is_privileged_user(request.user):
+                logger.warning(
+                    "ProductDetailView modification forbidden",
+                    user_id=request.user.id,
+                    method=request.method,
+                )
+                return error_response(
+                    "FORBIDDEN",
+                    "You do not have permission to manage products",
                 )
     elif view_name in ("UserAddressListView", "UserAddressDetailView"):
         if not _is_authenticated_user(request):

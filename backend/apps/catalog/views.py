@@ -19,21 +19,29 @@ from .mappers import ProductMapper
 logger = get_logger(__name__).bind(component="catalog", layer="view")
 
 
-def _ensure_category_privileged(log, request, action: str):
+def _ensure_admin_privileged(log, request, action: str, resource: str):
     user = getattr(request, "user", None)
     if not user or not getattr(user, "is_authenticated", False):
-        log.warning("Unauthorized category action attempt", action=action)
+        log.warning("Unauthorized %s action attempt", resource, action=action)
         return error_response("UNAUTHORIZED", "Authentication required")
     if not (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
         log.warning(
-            "Forbidden category action",
+            "Forbidden %s action", resource,
             action=action,
             user_id=getattr(user, "id", None),
         )
         return error_response(
-            "FORBIDDEN", "You do not have permission to manage categories"
+            "FORBIDDEN", f"You do not have permission to manage {resource}"
         )
     return None
+
+
+def _ensure_category_privileged(log, request, action: str):
+    return _ensure_admin_privileged(log, request, action, "categories")
+
+
+def _ensure_product_privileged(log, request, action: str):
+    return _ensure_admin_privileged(log, request, action, "products")
 
 
 @extend_schema(tags=["Catalog"])
@@ -75,6 +83,9 @@ class ProductListView(APIView):
         },
     )
     def post(self, request):
+        guard = _ensure_product_privileged(self.log, request, "create")
+        if guard:
+            return guard
         serializer = ProductWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.log.info(
@@ -124,6 +135,9 @@ class ProductDetailView(APIView):
         },
     )
     def put(self, request, product_id: int):
+        guard = _ensure_product_privileged(self.log, request, "replace")
+        if guard:
+            return guard
         serializer = ProductWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.log.info("Replacing product", product_id=product_id)
@@ -146,6 +160,9 @@ class ProductDetailView(APIView):
         },
     )
     def patch(self, request, product_id: int):
+        guard = _ensure_product_privileged(self.log, request, "patch")
+        if guard:
+            return guard
         self.log.info("Patching product", product_id=product_id)
         dto_existing = self.service.get_product(product_id)
         if not dto_existing:
@@ -163,6 +180,9 @@ class ProductDetailView(APIView):
         responses={204: None, 404: OpenApiResponse(response=ErrorResponseSerializer)},
     )
     def delete(self, request, product_id: int):
+        guard = _ensure_product_privileged(self.log, request, "delete")
+        if guard:
+            return guard
         self.log.info("Deleting product", product_id=product_id)
         deleted = self.service.delete_product(product_id)
         if not deleted:

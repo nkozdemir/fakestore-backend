@@ -204,6 +204,16 @@ class UserViewsUnitTests(unittest.TestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["error"]["code"], "VALIDATION_ERROR")
 
+    def test_user_list_post_forbidden_when_authenticated_non_admin(self):
+        view = UserListView()
+        view.service = self.service
+        request = DummyRequest(
+            {"username": "dup"},
+            user=self._make_user(5, staff=False, superuser=False),
+        )
+        response = view.post(request)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
     def test_user_detail_get_and_delete_paths(self):
         view = UserDetailView()
         view.service = self.service

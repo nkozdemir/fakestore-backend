@@ -184,8 +184,8 @@ class CartServiceUnitTests(unittest.TestCase):
             5,
             {
                 "products": [
-                    {"productId": 1, "quantity": 2},
-                    {"productId": 2, "quantity": 1},
+                    {"product_id": 1, "quantity": 2},
+                    {"product_id": 2, "quantity": 1},
                 ]
             },
         )
@@ -197,12 +197,12 @@ class CartServiceUnitTests(unittest.TestCase):
             6,
             {
                 "products": [
-                    {"productId": 1, "quantity": 1},
+                    {"product_id": 1, "quantity": 1},
                 ]
             },
         )
         updated = self.service.update_cart(
-            dto.id, {"items": [{"productId": 2, "quantity": 3}]}
+            dto.id, {"items": [{"product_id": 2, "quantity": 3}]}
         )
         self.assertEqual(len(updated.items), 1)
         self.assertEqual(updated.items[0].product.id, 2)
@@ -213,7 +213,7 @@ class CartServiceUnitTests(unittest.TestCase):
             12,
             {
                 "products": [
-                    {"productId": 1, "quantity": 2},
+                    {"product_id": 1, "quantity": 2},
                 ],
                 "date": "2024-01-01",
             },
@@ -228,15 +228,15 @@ class CartServiceUnitTests(unittest.TestCase):
             7,
             {
                 "products": [
-                    {"productId": 1, "quantity": 1},
+                    {"product_id": 1, "quantity": 1},
                 ]
             },
         )
         patched = self.service.patch_operations(
             dto.id,
             {
-                "add": [{"productId": 2, "quantity": 2}],
-                "update": [{"productId": 1, "quantity": 5}],
+                "add": [{"product_id": 2, "quantity": 2}],
+                "update": [{"product_id": 1, "quantity": 5}],
                 "remove": [999],
             },
         )
@@ -249,7 +249,7 @@ class CartServiceUnitTests(unittest.TestCase):
             8,
             {
                 "products": [
-                    {"productId": 1, "quantity": 1},
+                    {"product_id": 1, "quantity": 1},
                 ]
             },
         )

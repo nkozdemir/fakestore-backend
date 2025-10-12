@@ -106,8 +106,8 @@ class FakeUser:
         self.id = attrs.pop("id", None)
         self.username = attrs.get("username", "")
         self.email = attrs.get("email", "")
-        self.firstname = attrs.get("firstname", "")
-        self.lastname = attrs.get("lastname", "")
+        self.first_name = attrs.get("first_name", "")
+        self.last_name = attrs.get("last_name", "")
         self.phone = attrs.get("phone", "")
         self.password = attrs.get("password", "")
         self.addresses = FakeAddressManager()
@@ -134,8 +134,8 @@ class UserServiceUnitTests(unittest.TestCase):
             "id": user.id,
             "username": user.username,
             "email": user.email,
-            "firstname": user.firstname,
-            "lastname": user.lastname,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
             "phone": user.phone,
             "addresses": [addr.id for addr in user.addresses.all()],
         }
@@ -157,8 +157,8 @@ class UserServiceUnitTests(unittest.TestCase):
         payload = {
             "username": "alice",
             "email": "alice@example.com",
-            "firstname": "Alice",
-            "lastname": "Example",
+            "first_name": "Alice",
+            "last_name": "Example",
             "phone": "123",
             "password": "Secret123",
             "address": {

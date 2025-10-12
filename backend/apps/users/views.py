@@ -79,6 +79,19 @@ class UserListView(APIView):
         },
     )
     def post(self, request):
+        user = getattr(request, "user", None)
+        if user and getattr(user, "is_authenticated", False):
+            is_privileged = bool(
+                getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)
+            )
+            if not is_privileged:
+                self.log.warning(
+                    "Authenticated user attempted to create account",
+                    actor_id=getattr(user, "id", None),
+                )
+                return error_response(
+                    "FORBIDDEN", "You do not have permission to create users"
+                )
         serializer = UserSerializer(data=request.data)
         try:
             serializer.is_valid(raise_exception=True)

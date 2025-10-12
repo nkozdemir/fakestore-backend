@@ -115,8 +115,8 @@ Pagination (Products list):
 Cart PATCH payload supports combined operations (executed in order add → update → remove):
 ```json
 {
-  "add": [{"productId": 10, "quantity": 2}],
-  "update": [{"productId": 5, "quantity": 7}],
+  "add": [{"product_id": 10, "quantity": 2}],
+  "update": [{"product_id": 5, "quantity": 7}],
   "remove": [3],
   "date": "2025-09-12T10:00:00Z",
   "userId": 4
@@ -125,7 +125,7 @@ Cart PATCH payload supports combined operations (executed in order add → updat
 Rules:
 - add: increments quantity (creates line if absent)
 - update: sets quantity exactly (creates if absent)
-- remove: deletes line items by productId
+- remove: deletes line items by product_id
 - date: ISO date/datetime string (date part stored)
 - userId: reassign cart to another user (no auth rules yet)
 
@@ -167,7 +167,7 @@ Examples:
 {"error":{"code":"VALIDATION_ERROR","message":"Some category IDs do not exist","status":400,"details":{"missing":[999]}}}
 
 // Invalid quantity in cart patch
-{"error":{"code":"VALIDATION_ERROR","message":"Invalid quantity","status":400,"details":{"productId":1,"quantity":-5},"hint":"Ensure quantity is positive"}}
+{"error":{"code":"VALIDATION_ERROR","message":"Invalid quantity","status":400,"details":{"product_id":1,"quantity":-5},"hint":"Ensure quantity is positive"}}
 ```
 
 ## Extending

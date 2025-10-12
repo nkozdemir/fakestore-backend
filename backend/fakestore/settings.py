@@ -68,6 +68,10 @@ REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 
+SIMPLE_JWT = {
+    "UPDATE_LAST_LOGIN": True,
+}
+
 SPECTACULAR_SETTINGS = {
     "TITLE": "FakeStore API",
     "DESCRIPTION": "FakeStore backend API with layered architecture, JWT auth, and carts/ratings.",

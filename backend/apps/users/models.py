@@ -3,9 +3,8 @@ from django.contrib.auth.models import AbstractUser
 
 
 class User(AbstractUser):
-    # id, username, email, password, is_active, is_staff, is_superuser, groups, user_permissions are inherited
-    firstname = models.CharField(max_length=100)
-    lastname = models.CharField(max_length=100)
+    # id, username, first_name, last_name, email, password, is_active, is_staff,
+    # is_superuser, groups, user_permissions are inherited from AbstractUser
     phone = models.CharField(max_length=50, blank=True, null=True)
     # Ensure email uniqueness across users
     email = models.EmailField(unique=True)

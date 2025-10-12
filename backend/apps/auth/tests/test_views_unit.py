@@ -17,8 +17,8 @@ class FakeAuthUser:
         self.id = attrs.get("id")
         self.username = attrs.get("username", "")
         self.email = attrs.get("email", "")
-        self.firstname = attrs.get("firstname", "")
-        self.lastname = attrs.get("lastname", "")
+        self.first_name = attrs.get("first_name", "")
+        self.last_name = attrs.get("last_name", "")
         self.is_staff = attrs.get("is_staff", False)
         self.is_superuser = attrs.get("is_superuser", False)
 
@@ -70,8 +70,6 @@ class AuthViewsUnitTests(unittest.TestCase):
         self.user_patch = patch("apps.auth.views.User")
         self.mock_user_cls = self.user_patch.start()
         self.mock_user_cls.objects = self.user_manager
-        setattr(self.mock_user_cls, "firstname", None)
-        setattr(self.mock_user_cls, "lastname", None)
 
     def tearDown(self):
         self.user_patch.stop()
@@ -132,8 +130,8 @@ class AuthViewsUnitTests(unittest.TestCase):
             id=1,
             username="me",
             email="me@example.com",
-            firstname="Me",
-            lastname="User",
+            first_name="Me",
+            last_name="User",
             is_staff=True,
             is_superuser=False,
         )

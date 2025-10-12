@@ -16,24 +16,30 @@ class CartReadSerializer(serializers.Serializer):
     items = CartProductSerializer(many=True)
 
 
+class CartItemWriteSerializer(serializers.Serializer):
+    product_id = serializers.IntegerField()
+    quantity = serializers.IntegerField(min_value=1)
+
+
 class CartWriteSerializer(serializers.Serializer):
+
     id = serializers.IntegerField(required=False)
     user_id = serializers.IntegerField(required=False)
     date = serializers.CharField(required=False)
     # Relax validation for write payloads; service ignores items on create/update
-    items = serializers.ListField(child=serializers.DictField(), required=False)
+    items = CartItemWriteSerializer(many=True, required=False)
 
 
 class CartCreateProductSerializer(serializers.Serializer):
-    productId = serializers.IntegerField()
+    product_id = serializers.IntegerField()
     quantity = serializers.IntegerField(min_value=1)
 
 
 class CartCreateSerializer(serializers.Serializer):
-    # POST-only serializer: camelCase contract
-    # userId is inferred from the JWT-authenticated user; do not include it in the payload
+    # POST-only serializer: snake_case items; userId remains to support admin overrides.
     date = serializers.CharField(required=False)
     products = serializers.ListField(
         child=CartCreateProductSerializer(), required=False
     )
+    userId = serializers.IntegerField(required=False)
     # 'id' is not accepted here; it will be auto-assigned by the service

@@ -17,8 +17,8 @@ class AddressDTO:
 @dataclass
 class UserDTO:
     id: int
-    firstname: str
-    lastname: str
+    first_name: str
+    last_name: str
     email: str
     username: str
     phone: str
@@ -40,8 +40,8 @@ def address_to_dto(a: Address) -> AddressDTO:
 def user_to_dto(u: User) -> UserDTO:
     return UserDTO(
         id=u.id,
-        firstname=u.firstname,
-        lastname=u.lastname,
+        first_name=u.first_name,
+        last_name=u.last_name,
         email=u.email,
         username=u.username,
         phone=u.phone,
