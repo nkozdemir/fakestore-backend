@@ -400,6 +400,7 @@ paths:
     post:
       operationId: categories_create
       summary: Create category
+      description: Requires staff or superuser privileges.
       tags:
       - Catalog
       requestBody:
@@ -418,6 +419,18 @@ paths:
                 $ref: '#/components/schemas/Category'
           description: ''
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
           content:
             application/json:
               schema:
@@ -454,6 +467,7 @@ paths:
     put:
       operationId: categories_update
       summary: Replace category
+      description: Requires staff or superuser privileges.
       parameters:
       - in: path
         name: category_id
@@ -504,6 +518,7 @@ paths:
     patch:
       operationId: categories_partial_update
       summary: Update category
+      description: Requires staff or superuser privileges.
       parameters:
       - in: path
         name: category_id
@@ -553,6 +568,7 @@ paths:
     delete:
       operationId: categories_destroy
       summary: Delete category
+      description: Requires staff or superuser privileges.
       parameters:
       - in: path
         name: category_id
@@ -566,6 +582,18 @@ paths:
       responses:
         '204':
           description: No response body
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
         '404':
           content:
             application/json:
@@ -1104,11 +1132,17 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
-  /api/users/me/addresses/:
+  /api/users/{user_id}/addresses/:
     get:
-      operationId: users_me_addresses_list
-      description: Lists addresses for the authenticated user (derived from JWT).
-      summary: List addresses for current user
+      operationId: users_addresses_list
+      description: Lists addresses for the specified user. Regular users may only access their own addresses; superusers may access any user's addresses.
+      summary: List addresses for a user
+      parameters:
+      - in: path
+        name: user_id
+        schema:
+          type: integer
+        required: true
       tags:
       - Users
       - Addresses
@@ -1129,6 +1163,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
         '404':
           content:
             application/json:
@@ -1136,9 +1176,15 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
     post:
-      operationId: users_me_addresses_create
-      description: Creates an address owned by the authenticated user.
-      summary: Create address for current user
+      operationId: users_addresses_create
+      description: Creates an address owned by the specified user. Regular users may only create addresses for themselves; superusers may manage any user.
+      summary: Create address for a user
+      parameters:
+      - in: path
+        name: user_id
+        schema:
+          type: integer
+        required: true
       tags:
       - Users
       - Addresses
@@ -1169,17 +1215,23 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
-  /api/users/me/addresses/{address_id}/:
+  /api/users/addresses/{address_id}/:
     get:
-      operationId: users_me_addresses_retrieve
-      description: Retrieves an address owned by the authenticated user.
-      summary: Get address for current user
+      operationId: users_addresses_retrieve
+      description: Retrieves an address by ID. Regular users may only access their own addresses; superusers may access any user's addresses.
+      summary: Get address by ID
       parameters:
       - in: path
         name: address_id
@@ -1199,6 +1251,151 @@ paths:
                 $ref: '#/components/schemas/Address'
           description: ''
         '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+    put:
+      operationId: users_addresses_update
+      summary: Replace address by ID
+      description: Replaces an address by ID. Regular users may only manage their own addresses; superusers may manage any user's addresses.
+      parameters:
+      - in: path
+        name: address_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Users
+      - Addresses
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddressWriteRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Address'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+    patch:
+      operationId: users_addresses_partial_update
+      summary: Update address by ID
+      description: Partially updates an address by ID. Regular users may only manage their own addresses; superusers may manage any user's addresses.
+      parameters:
+      - in: path
+        name: address_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Users
+      - Addresses
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAddressWriteRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Address'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+    delete:
+      operationId: users_addresses_destroy
+      summary: Delete address by ID
+      description: Deletes an address by ID. Regular users may only manage their own addresses; superusers may manage any user's addresses.
+      parameters:
+      - in: path
+        name: address_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Users
+      - Addresses
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
           content:
             application/json:
               schema:

@@ -1,4 +1,6 @@
 from django.utils.deprecation import MiddlewareMixin
+from rest_framework.renderers import JSONRenderer
+
 from apps.api.validation import validate_request_context
 from apps.common import get_logger
 
@@ -23,6 +25,15 @@ class RequestValidationMiddleware(MiddlewareMixin):
         )
         response = validate_request_context(request, view_class, view_kwargs)
         if response is not None:
+            if getattr(response, "accepted_renderer", None) is None:
+                renderer = JSONRenderer()
+                response.accepted_renderer = renderer
+                response.accepted_media_type = renderer.media_type
+                response.renderer_context = {
+                    "request": request,
+                    "response": response,
+                    "view": getattr(view_func, "view_class", None),
+                }
             logger.info(
                 "Request blocked by validation",
                 view=view_name,

@@ -6,6 +6,12 @@ class CategoryRepository(GenericRepository[Category]):
     def __init__(self):
         super().__init__(Category)
 
+    def detach_from_products(self, category: Category):
+        """
+        Remove relationships between the category and any products before deletion.
+        """
+        category.products.clear()
+
 
 class ProductRepository(GenericRepository[Product]):
     def __init__(self):

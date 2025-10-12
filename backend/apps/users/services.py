@@ -102,6 +102,20 @@ class UserService:
             return None
         return [address_to_dto(a) for a in user.addresses.all()]
 
+    def get_address_with_owner(self, address_id: int):
+        self.logger.debug("Fetching address with owner", address_id=address_id)
+        addr = self.addresses.get(id=address_id)
+        if not addr:
+            self.logger.info("Address not found", address_id=address_id)
+            return None, None
+        owner_id = getattr(addr.user, "id", None)
+        self.logger.debug(
+            "Resolved address owner",
+            address_id=address_id,
+            owner_id=owner_id,
+        )
+        return address_to_dto(addr), owner_id
+
     def get_user_address(self, user_id: int, address_id: int):
         self.logger.debug(
             "Fetching user address", user_id=user_id, address_id=address_id

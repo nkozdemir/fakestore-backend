@@ -327,6 +327,10 @@ class CategoryService:
                 "Category deletion failed: not found", category_id=category_id
             )
             return False
+        self.logger.debug(
+            "Detaching category from products before delete", category_id=category_id
+        )
+        self.categories.detach_from_products(category)
         self.categories.delete(category)
         self.logger.info("Category deleted", category_id=category_id)
         return True

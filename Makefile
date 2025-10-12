@@ -12,7 +12,7 @@
 
 SHELL := /bin/bash
 
-ENV_FILE ?= .env
+ENV_FILE ?= .env.prod
 COMPOSE_FILE ?= docker-compose.prod.yml
 DJANGO_APP_DIR ?= backend
 DJANGO_MANAGE := $(DJANGO_APP_DIR)/manage.py

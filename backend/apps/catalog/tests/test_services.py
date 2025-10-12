@@ -57,6 +57,7 @@ class FakeCategoryRepository:
     def __init__(self):
         self._categories = {}
         self._pk = 1
+        self.detached = []
 
     def create(self, **data):
         category = StubCategory(self._pk, data["name"])
@@ -70,6 +71,9 @@ class FakeCategoryRepository:
     def get(self, **filters):
         category_id = filters.get("id")
         return self._categories.get(category_id)
+
+    def detach_from_products(self, category: StubCategory):
+        self.detached.append(category.id)
 
     def delete(self, category: StubCategory):
         self._categories.pop(category.id, None)
@@ -343,3 +347,4 @@ class CategoryServiceUnitTests(unittest.TestCase):
         self.assertTrue(any(c.name == "Toys" for c in categories))
         deleted = self.service.delete_category(dto.id)
         self.assertTrue(deleted)
+        self.assertIn(dto.id, self.category_repo.detached)

@@ -8,9 +8,19 @@ from apps.api.validation import (
     _resolve_rating_user,
 )
 from apps.api.utils import error_response
-from apps.catalog.views import ProductByCategoriesView, ProductRatingView
+from apps.catalog.views import (
+    ProductByCategoriesView,
+    ProductRatingView,
+    CategoryListView,
+    CategoryDetailView,
+)
 from apps.carts.views import CartListView
-from apps.users.views import UserListView, UserDetailView, UserAddressListView
+from apps.users.views import (
+    UserListView,
+    UserDetailView,
+    UserAddressListView,
+    UserAddressDetailView,
+)
 
 
 factory = APIRequestFactory()
@@ -100,18 +110,113 @@ def test_validate_request_user_put_duplicate_email(mock_user_manager):
 
 def test_validate_request_user_address_requires_auth():
     request = factory.post(
-        "/api/users/me/addresses/", {"street": "Main"}, format="json"
+        "/api/users/4/addresses/", {"street": "Main"}, format="json"
     )
-    response = validate_request_context(request, UserAddressListView, {})
+    response = validate_request_context(request, UserAddressListView, {"user_id": 4})
     assert response.status_code == 401
 
 
 def test_validate_request_user_address_sets_validated_user():
-    request = factory.get("/api/users/me/addresses/")
-    request.user = types.SimpleNamespace(id=8, is_authenticated=True)
-    response = validate_request_context(request, UserAddressListView, {})
+    request = factory.get("/api/users/8/addresses/")
+    request.user = types.SimpleNamespace(
+        id=8, is_authenticated=True, is_superuser=False
+    )
+    response = validate_request_context(
+        request, UserAddressListView, {"user_id": 8}
+    )
     assert response is None
     assert getattr(request, "validated_user_id") == 8
+
+
+def test_validate_request_user_address_detail_requires_auth():
+    request = factory.get("/api/users/addresses/3/")
+    response = validate_request_context(
+        request, UserAddressDetailView, {"address_id": 3}
+    )
+    assert response.status_code == 401
+
+
+def test_validate_request_user_address_detail_sets_validated_user():
+    request = factory.get("/api/users/addresses/5/")
+    request.user = types.SimpleNamespace(
+        id=4, is_authenticated=True, is_superuser=True
+    )
+    response = validate_request_context(
+        request, UserAddressDetailView, {"address_id": 5}
+    )
+    assert response is None
+    assert getattr(request, "validated_user_id") == 4
+
+
+def test_validate_request_category_post_requires_auth():
+    request = factory.post("/api/categories/", {"name": "New"}, format="json")
+    response = validate_request_context(request, CategoryListView, {})
+    assert response.status_code == 401
+
+
+def test_validate_request_category_post_forbidden_for_non_staff():
+    request = factory.post("/api/categories/", {"name": "New"}, format="json")
+    request.user = types.SimpleNamespace(
+        id=2, is_authenticated=True, is_staff=False, is_superuser=False
+    )
+    response = validate_request_context(request, CategoryListView, {})
+    assert response.status_code == 403
+
+
+def test_validate_request_category_post_allows_staff():
+    request = factory.post("/api/categories/", {"name": "New"}, format="json")
+    request.user = types.SimpleNamespace(
+        id=3, is_authenticated=True, is_staff=True, is_superuser=False
+    )
+    response = validate_request_context(request, CategoryListView, {})
+    assert response is None
+    assert getattr(request, "validated_user_id") == 3
+
+
+def test_validate_request_category_detail_forbidden_for_non_staff():
+    request = factory.patch("/api/categories/1/", {"name": "New"}, format="json")
+    request.user = types.SimpleNamespace(
+        id=4, is_authenticated=True, is_staff=False, is_superuser=False
+    )
+    response = validate_request_context(
+        request, CategoryDetailView, {"category_id": 1}
+    )
+    assert response.status_code == 403
+
+
+def test_validate_request_category_detail_allows_superuser():
+    request = factory.delete("/api/categories/1/")
+    request.user = types.SimpleNamespace(
+        id=5, is_authenticated=True, is_staff=False, is_superuser=True
+    )
+    response = validate_request_context(
+        request, CategoryDetailView, {"category_id": 1}
+    )
+    assert response is None
+    assert getattr(request, "validated_user_id") == 5
+
+
+def test_validate_request_user_address_forbidden_for_other_user():
+    request = factory.get("/api/users/2/addresses/")
+    request.user = types.SimpleNamespace(
+        id=5, is_authenticated=True, is_superuser=False
+    )
+    response = validate_request_context(
+        request, UserAddressListView, {"user_id": 2}
+    )
+    assert response.status_code == 403
+
+
+def test_validate_request_user_address_allows_superuser():
+    request = factory.get("/api/users/3/addresses/")
+    request.user = types.SimpleNamespace(
+        id=1, is_authenticated=True, is_superuser=True
+    )
+    response = validate_request_context(
+        request, UserAddressListView, {"user_id": 3}
+    )
+    assert response is None
+    assert getattr(request, "validated_user_id") == 1
 
 
 @patch("apps.api.validation.User.objects")

@@ -1,22 +1,58 @@
 import json
 from typing import Any, Dict, Optional
+
 from django.http import HttpRequest
+from rest_framework.exceptions import AuthenticationFailed as DRFAuthenticationFailed
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework_simplejwt.exceptions import InvalidToken
+
 from apps.api.utils import error_response
 from apps.users.models import User
 from apps.common import get_logger
 
 logger = get_logger(__name__).bind(component="api", layer="validation")
 
+_jwt_authenticator = JWTAuthentication()
+
 
 def _is_authenticated_user(request: HttpRequest) -> bool:
     user = getattr(request, "user", None)
-    return bool(
-        user and getattr(user, "is_authenticated", False) and getattr(user, "id", None)
-    )
+    if user and getattr(user, "is_authenticated", False) and getattr(user, "id", None):
+        return True
+
+    # DRF attaches the authenticated user later in the request lifecycle. Since this
+    # middleware runs earlier, attempt JWT authentication manually to support bearer tokens.
+    meta = getattr(request, "META", {}) or {}
+    auth_header = meta.get("HTTP_AUTHORIZATION") if hasattr(meta, "get") else None
+    if not auth_header:
+        return False
+
+    try:
+        authenticated = _jwt_authenticator.authenticate(request)
+    except (InvalidToken, DRFAuthenticationFailed) as exc:
+        logger.warning("JWT authentication failed", detail=str(exc))
+        return False
+
+    if not authenticated:
+        return False
+
+    user, token = authenticated
+    if not getattr(user, "is_authenticated", False) or not getattr(user, "id", None):
+        return False
+
+    # Mirror DRF's behaviour so downstream consumers see the authenticated user.
+    request.user = user
+    request.auth = token
+    logger.debug("Authenticated user from bearer token", user_id=user.id)
+    return True
 
 
 def _set_validated_user(request: HttpRequest, user_id: Optional[int]) -> None:
     request.validated_user_id = user_id
+
+
+def _is_privileged_user(user: Any) -> bool:
+    return bool(getattr(user, "is_staff", False) or getattr(user, "is_superuser", False))
 
 
 def _extract_request_data(request: HttpRequest) -> Dict[str, Any]:
@@ -175,6 +211,21 @@ def validate_request_context(request: HttpRequest, view_class, view_kwargs) -> A
             if result:
                 logger.info("UserListView uniqueness check failed")
                 return result
+    elif view_name == "CategoryListView":
+        if request.method in ("POST",):
+            if not _is_authenticated_user(request):
+                logger.warning("CategoryListView POST requires authentication")
+                return error_response("UNAUTHORIZED", "Authentication required")
+            _set_validated_user(request, int(request.user.id))
+            if not _is_privileged_user(request.user):
+                logger.warning(
+                    "CategoryListView POST forbidden",
+                    user_id=request.user.id,
+                )
+                return error_response(
+                    "FORBIDDEN",
+                    "You do not have permission to manage categories",
+                )
     elif view_name == "UserDetailView":
         if request.method in ("PUT", "PATCH"):
             user_id = view_kwargs.get("user_id")
@@ -182,14 +233,62 @@ def validate_request_context(request: HttpRequest, view_class, view_kwargs) -> A
             if result:
                 logger.info("UserDetailView uniqueness check failed", user_id=user_id)
                 return result
+    elif view_name == "CategoryDetailView":
+        if request.method in ("PUT", "PATCH", "DELETE"):
+            if not _is_authenticated_user(request):
+                logger.warning(
+                    "CategoryDetailView modification requires authentication",
+                    method=request.method,
+                )
+                return error_response("UNAUTHORIZED", "Authentication required")
+            _set_validated_user(request, int(request.user.id))
+            if not _is_privileged_user(request.user):
+                logger.warning(
+                    "CategoryDetailView modification forbidden",
+                    user_id=request.user.id,
+                    method=request.method,
+                )
+                return error_response(
+                    "FORBIDDEN",
+                    "You do not have permission to manage categories",
+                )
     elif view_name in ("UserAddressListView", "UserAddressDetailView"):
         if not _is_authenticated_user(request):
             logger.warning("User address view requires authentication", view=view_name)
             return error_response("UNAUTHORIZED", "Authentication required")
-        _set_validated_user(request, int(request.user.id))
+        actor_id = int(request.user.id)
+        _set_validated_user(request, actor_id)
+        target_user_id = view_kwargs.get("user_id")
+        if target_user_id is not None:
+            try:
+                target_user_id = int(target_user_id)
+            except (TypeError, ValueError):
+                logger.warning(
+                    "Invalid user_id in address request",
+                    view=view_name,
+                    value=target_user_id,
+                )
+                return error_response(
+                    "VALIDATION_ERROR",
+                    "Invalid user identifier",
+                    {"userId": str(target_user_id)},
+                )
+            is_superuser = bool(getattr(request.user, "is_superuser", False))
+            if actor_id != target_user_id and not is_superuser:
+                logger.warning(
+                    "Address request forbidden for user",
+                    actor_id=actor_id,
+                    target_user_id=target_user_id,
+                    view=view_name,
+                )
+                return error_response(
+                    "FORBIDDEN",
+                    "You do not have permission to manage this user's addresses",
+                )
         logger.debug(
             "Validated user for address request",
-            user_id=request.user.id,
+            user_id=actor_id,
+            target_user_id=target_user_id,
             view=view_name,
         )
 

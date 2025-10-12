@@ -19,6 +19,23 @@ from .mappers import ProductMapper
 logger = get_logger(__name__).bind(component="catalog", layer="view")
 
 
+def _ensure_category_privileged(log, request, action: str):
+    user = getattr(request, "user", None)
+    if not user or not getattr(user, "is_authenticated", False):
+        log.warning("Unauthorized category action attempt", action=action)
+        return error_response("UNAUTHORIZED", "Authentication required")
+    if not (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
+        log.warning(
+            "Forbidden category action",
+            action=action,
+            user_id=getattr(user, "id", None),
+        )
+        return error_response(
+            "FORBIDDEN", "You do not have permission to manage categories"
+        )
+    return None
+
+
 @extend_schema(tags=["Catalog"])
 class ProductListView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
@@ -177,6 +194,9 @@ class CategoryListView(APIView):
         },
     )
     def post(self, request):
+        guard = _ensure_category_privileged(self.log, request, "create")
+        if guard:
+            return guard
         serializer = CategorySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.log.info("Creating category", name=serializer.validated_data.get("name"))
@@ -222,6 +242,9 @@ class CategoryDetailView(APIView):
         },
     )
     def put(self, request, category_id: int):
+        guard = _ensure_category_privileged(self.log, request, "replace")
+        if guard:
+            return guard
         serializer = CategorySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.log.info("Replacing category", category_id=category_id)
@@ -245,6 +268,9 @@ class CategoryDetailView(APIView):
         },
     )
     def patch(self, request, category_id: int):
+        guard = _ensure_category_privileged(self.log, request, "patch")
+        if guard:
+            return guard
         serializer = CategorySerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         self.log.info("Patching category", category_id=category_id)
@@ -263,6 +289,9 @@ class CategoryDetailView(APIView):
         responses={204: None, 404: OpenApiResponse(response=ErrorResponseSerializer)},
     )
     def delete(self, request, category_id: int):
+        guard = _ensure_category_privileged(self.log, request, "delete")
+        if guard:
+            return guard
         self.log.info("Deleting category", category_id=category_id)
         deleted = self.service.delete_category(category_id)
         if not deleted:

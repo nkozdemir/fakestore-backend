@@ -205,7 +205,9 @@ class CatalogViewsUnitTests(unittest.TestCase):
         service_mock = Mock()
         service_mock.list_categories.return_value = categories
         service_mock.create_category.return_value = created
-        user = types.SimpleNamespace(id=20, is_authenticated=True)
+        user = types.SimpleNamespace(
+            id=20, is_authenticated=True, is_staff=True, is_superuser=False
+        )
         with patch.object(CategoryListView, "service", service_mock):
             request_get = self.factory.get("/api/categories/")
             response_get = self.dispatch(request_get, CategoryListView)
@@ -220,6 +222,20 @@ class CatalogViewsUnitTests(unittest.TestCase):
             response_post = self.dispatch(request_post, CategoryListView)
         self.assertEqual(response_post.status_code, 201)
         self.assertEqual(response_post.data["name"], "B")
+
+    def test_category_post_forbidden_for_non_staff(self):
+        service_mock = Mock()
+        with patch.object(CategoryListView, "service", service_mock):
+            request_post = self.factory.post(
+                "/api/categories/", {"name": "B"}, format="json"
+            )
+            user = types.SimpleNamespace(
+                id=21, is_authenticated=True, is_staff=False, is_superuser=False
+            )
+            self.authenticate(request_post, user)
+            response_post = self.dispatch(request_post, CategoryListView)
+        self.assertEqual(response_post.status_code, 403)
+        service_mock.create_category.assert_not_called()
 
     def test_category_detail_get_and_not_found(self):
         service_mock = Mock()
@@ -246,7 +262,9 @@ class CatalogViewsUnitTests(unittest.TestCase):
             make_category_dto(5, "Patched"),
         ]
         service_mock.delete_category.side_effect = [False, True]
-        user = types.SimpleNamespace(id=30, is_authenticated=True)
+        user = types.SimpleNamespace(
+            id=30, is_authenticated=True, is_staff=True, is_superuser=False
+        )
 
         with patch.object(CategoryDetailView, "service", service_mock):
             request_put = self.factory.put(
@@ -296,10 +314,25 @@ class CatalogViewsUnitTests(unittest.TestCase):
             )
         self.assertEqual(response_delete.status_code, 204)
 
+    def test_category_detail_delete_forbidden_for_non_staff(self):
+        service_mock = Mock()
+        service_mock.delete_category.return_value = True
+        with patch.object(CategoryDetailView, "service", service_mock):
+            request_delete = self.factory.delete("/api/categories/5/")
+            user = types.SimpleNamespace(
+                id=33, is_authenticated=True, is_staff=False, is_superuser=False
+            )
+            self.authenticate(request_delete, user)
+            response = self.dispatch(request_delete, CategoryDetailView, category_id=5)
+        self.assertEqual(response.status_code, 403)
+        service_mock.delete_category.assert_not_called()
+
     def test_category_detail_put_not_found(self):
         service_mock = Mock()
         service_mock.update_category.return_value = None
-        user = types.SimpleNamespace(id=31, is_authenticated=True)
+        user = types.SimpleNamespace(
+            id=31, is_authenticated=True, is_staff=True, is_superuser=False
+        )
         with patch.object(CategoryDetailView, "service", service_mock):
             request_put = self.factory.put(
                 "/api/categories/9/", {"name": "Missing"}, format="json"
