@@ -1,0 +1,1728 @@
+{
+  "info": {
+    "name": "FakeStore API",
+    "description": "FakeStore backend API with layered architecture, JWT auth, and carts/ratings.",
+    "_postman_id": "fbdd65f0-21b6-4025-98ce-326d781cb956",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login (JWT obtain pair)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Takes a set of user credentials and returns an access and refresh JSON web\ntoken pair to prove the authentication of those credentials.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"string\",\n  \"password\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Logout (blacklist refresh)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/logout/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "logout"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Logout from all devices",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/logout-all/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "logout-all"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get current user",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/me/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh JWT",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/refresh/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "refresh"
+              ]
+            },
+            "description": "Takes a refresh type JSON web token and returns an access type JSON web\ntoken if the refresh token is valid.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Register user",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"string\",\n  \"email\": \"user@example.com\",\n  \"password\": \"string\",\n  \"first_name\": \"string\",\n  \"last_name\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Carts",
+      "item": [
+        {
+          "name": "List carts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/carts/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "carts"
+              ],
+              "query": [
+                {
+                  "key": "userId",
+                  "value": "0",
+                  "description": "Filter by user ID (preferred)"
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create cart",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/carts/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "carts"
+              ]
+            },
+            "description": "Creates a new cart for the authenticated user. The user is derived from the JWT in the Authorization header; admins may include userId to create carts for other users. Optionally include initial products to seed line items.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"date\": \"string\",\n  \"products\": [\n    {\n      \"product_id\": 0,\n      \"quantity\": 0\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get cart",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/carts/{{cart_id}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "carts",
+                "{{cart_id}}"
+              ],
+              "variable": [
+                {
+                  "key": "cart_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Replace cart",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/carts/{{cart_id}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "carts",
+                "{{cart_id}}"
+              ],
+              "variable": [
+                {
+                  "key": "cart_id",
+                  "value": "string",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Replaces the cart. Requires authentication; only the owner or a staff/superuser may update the cart. If unauthenticated, returns 401. If the cart does not exist or the actor lacks permission, returns 404 or 403 respectively.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 0,\n  \"user_id\": 0,\n  \"date\": \"string\",\n  \"items\": [\n    {\n      \"product_id\": 0,\n      \"quantity\": 0\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Patch cart items",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/carts/{{cart_id}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "carts",
+                "{{cart_id}}"
+              ],
+              "variable": [
+                {
+                  "key": "cart_id",
+                  "value": "string",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Applies add/update/remove item operations. Requires authentication; only the owner or a staff/superuser may patch a cart. If unauthenticated, returns 401. If the cart does not exist or the actor lacks permission, returns 404 or 403 respectively.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"add\": [\n    {\n      \"product_id\": 0,\n      \"quantity\": 0\n    }\n  ],\n  \"update\": [\n    {\n      \"product_id\": 0,\n      \"quantity\": 0\n    }\n  ],\n  \"remove\": [\n    0\n  ],\n  \"date\": \"string\",\n  \"userId\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete cart",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/carts/{{cart_id}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "carts",
+                "{{cart_id}}"
+              ],
+              "variable": [
+                {
+                  "key": "cart_id",
+                  "value": "string",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Deletes a cart. Requires authentication; only the owner or a staff/superuser may delete a cart. If unauthenticated, returns 401. If the cart does not exist or the actor lacks permission, returns 404 or 403 respectively."
+          },
+          "response": []
+        },
+        {
+          "name": "List carts by user",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/carts/users/{{user_id}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "carts",
+                "users",
+                "{{user_id}}"
+              ],
+              "variable": [
+                {
+                  "key": "user_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Catalog",
+      "item": [
+        {
+          "name": "List categories",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/categories/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "categories"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create category",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/categories/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "categories"
+              ]
+            },
+            "description": "Requires staff or superuser privileges.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get category",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/categories/{{category_id}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "categories",
+                "{{category_id}}"
+              ],
+              "variable": [
+                {
+                  "key": "category_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Replace category",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/categories/{{category_id}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "categories",
+                "{{category_id}}"
+              ],
+              "variable": [
+                {
+                  "key": "category_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Requires staff or superuser privileges.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update category",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/categories/{{category_id}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "categories",
+                "{{category_id}}"
+              ],
+              "variable": [
+                {
+                  "key": "category_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Requires staff or superuser privileges.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete category",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/categories/{{category_id}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "categories",
+                "{{category_id}}"
+              ],
+              "variable": [
+                {
+                  "key": "category_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Requires staff or superuser privileges."
+          },
+          "response": []
+        },
+        {
+          "name": "List products",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/products/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "category",
+                  "value": "string",
+                  "description": "Filter by category name"
+                }
+              ]
+            },
+            "description": "Supports pagination via ?page and ?limit. Cached results may be served."
+          },
+          "response": []
+        },
+        {
+          "name": "Create product",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/products/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products"
+              ]
+            },
+            "description": "Requires staff or superuser privileges.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"string\",\n  \"price\": \"string\",\n  \"description\": \"string\",\n  \"image\": \"string\",\n  \"rate\": 0,\n  \"count\": 0,\n  \"categories\": [\n    0\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get product",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/products/{{product_id}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                "{{product_id}}"
+              ],
+              "variable": [
+                {
+                  "key": "product_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Replace product",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/products/{{product_id}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                "{{product_id}}"
+              ],
+              "variable": [
+                {
+                  "key": "product_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"string\",\n  \"price\": \"string\",\n  \"description\": \"string\",\n  \"image\": \"string\",\n  \"rate\": 0,\n  \"count\": 0,\n  \"categories\": [\n    0\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update product",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/products/{{product_id}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                "{{product_id}}"
+              ],
+              "variable": [
+                {
+                  "key": "product_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Requires staff or superuser privileges.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"string\",\n  \"price\": \"string\",\n  \"description\": \"string\",\n  \"image\": \"string\",\n  \"rate\": 0,\n  \"count\": 0,\n  \"categories\": [\n    0\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete product",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/products/{{product_id}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                "{{product_id}}"
+              ],
+              "variable": [
+                {
+                  "key": "product_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Requires staff or superuser privileges."
+          },
+          "response": []
+        },
+        {
+          "name": "Get rating summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/products/{{product_id}}/rating/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                "{{product_id}}",
+                "rating"
+              ],
+              "variable": [
+                {
+                  "key": "product_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ],
+              "query": [
+                {
+                  "key": "userId",
+                  "value": "0",
+                  "description": "User ID (optional fallback when not authenticated)"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Set user rating",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/products/{{product_id}}/rating/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                "{{product_id}}",
+                "rating"
+              ],
+              "variable": [
+                {
+                  "key": "product_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ],
+              "query": [
+                {
+                  "key": "userId",
+                  "value": "0",
+                  "description": "User ID (optional fallback when not authenticated)"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete user rating",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/products/{{product_id}}/rating/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                "{{product_id}}",
+                "rating"
+              ],
+              "variable": [
+                {
+                  "key": "product_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ],
+              "query": [
+                {
+                  "key": "userId",
+                  "value": "0",
+                  "description": "User ID (optional fallback when not authenticated)"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List products by categories",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/products/by-categories/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                "by-categories"
+              ],
+              "query": [
+                {
+                  "key": "categoryIds",
+                  "value": "string",
+                  "description": "Comma-separated category IDs (camelCase)"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "List users",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create user",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users"
+              ]
+            },
+            "description": "Authenticated requests require staff or superuser privileges; anonymous sign-up is permitted.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"username\": \"string\",\n  \"phone\": \"string\",\n  \"first_name\": \"string\",\n  \"last_name\": \"string\",\n  \"password\": \"string\",\n  \"address\": {\n    \"city\": \"string\",\n    \"street\": \"string\",\n    \"number\": 0,\n    \"zipcode\": \"string\",\n    \"geolocation\": {\n      \"lat\": \"string\",\n      \"long\": \"string\"\n    }\n  },\n  \"name\": {\n    \"first_name\": \"string\",\n    \"last_name\": \"string\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get user by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/{{user_id}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{user_id}}"
+              ],
+              "variable": [
+                {
+                  "key": "user_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Replace user",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/{{user_id}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{user_id}}"
+              ],
+              "variable": [
+                {
+                  "key": "user_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"username\": \"string\",\n  \"phone\": \"string\",\n  \"first_name\": \"string\",\n  \"last_name\": \"string\",\n  \"password\": \"string\",\n  \"address\": {\n    \"city\": \"string\",\n    \"street\": \"string\",\n    \"number\": 0,\n    \"zipcode\": \"string\",\n    \"geolocation\": {\n      \"lat\": \"string\",\n      \"long\": \"string\"\n    }\n  },\n  \"name\": {\n    \"first_name\": \"string\",\n    \"last_name\": \"string\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update user",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/{{user_id}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{user_id}}"
+              ],
+              "variable": [
+                {
+                  "key": "user_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"username\": \"string\",\n  \"phone\": \"string\",\n  \"first_name\": \"string\",\n  \"last_name\": \"string\",\n  \"password\": \"string\",\n  \"address\": {\n    \"city\": \"string\",\n    \"street\": \"string\",\n    \"number\": 0,\n    \"zipcode\": \"string\",\n    \"geolocation\": {\n      \"lat\": \"string\",\n      \"long\": \"string\"\n    }\n  },\n  \"name\": {\n    \"first_name\": \"string\",\n    \"last_name\": \"string\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete user",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/{{user_id}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{user_id}}"
+              ],
+              "variable": [
+                {
+                  "key": "user_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List addresses for a user",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/{{user_id}}/addresses/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{user_id}}",
+                "addresses"
+              ],
+              "variable": [
+                {
+                  "key": "user_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Lists addresses for the specified user. Regular users may only access their own addresses; superusers may access any user's addresses."
+          },
+          "response": []
+        },
+        {
+          "name": "Create address for a user",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/{{user_id}}/addresses/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{user_id}}",
+                "addresses"
+              ],
+              "variable": [
+                {
+                  "key": "user_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Creates an address owned by the specified user. Regular users may only create addresses for themselves; superusers may manage any user.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"city\": \"string\",\n  \"street\": \"string\",\n  \"number\": 0,\n  \"zipcode\": \"string\",\n  \"geolocation\": {\n    \"lat\": \"string\",\n    \"long\": \"string\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get address by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/addresses/{{address_id}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "addresses",
+                "{{address_id}}"
+              ],
+              "variable": [
+                {
+                  "key": "address_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Retrieves an address by ID. Regular users may only access their own addresses; superusers may access any user's addresses."
+          },
+          "response": []
+        },
+        {
+          "name": "Replace address by ID",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/addresses/{{address_id}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "addresses",
+                "{{address_id}}"
+              ],
+              "variable": [
+                {
+                  "key": "address_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Replaces an address by ID. Regular users may only manage their own addresses; superusers may manage any user's addresses.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"city\": \"string\",\n  \"street\": \"string\",\n  \"number\": 0,\n  \"zipcode\": \"string\",\n  \"geolocation\": {\n    \"lat\": \"string\",\n    \"long\": \"string\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update address by ID",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/addresses/{{address_id}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "addresses",
+                "{{address_id}}"
+              ],
+              "variable": [
+                {
+                  "key": "address_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Partially updates an address by ID. Regular users may only manage their own addresses; superusers may manage any user's addresses.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"city\": \"string\",\n  \"street\": \"string\",\n  \"number\": 0,\n  \"zipcode\": \"string\",\n  \"geolocation\": {\n    \"lat\": \"string\",\n    \"long\": \"string\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete address by ID",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/addresses/{{address_id}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "addresses",
+                "{{address_id}}"
+              ],
+              "variable": [
+                {
+                  "key": "address_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Deletes an address by ID. Regular users may only manage their own addresses; superusers may manage any user's addresses."
+          },
+          "response": []
+        },
+        {
+          "name": "Replace address for current user",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/health/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health",
+                "ready"
+              ],
+              "variable": [
+                {
+                  "key": "address_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"city\": \"string\",\n  \"street\": \"string\",\n  \"number\": 0,\n  \"zipcode\": \"string\",\n  \"geolocation\": {\n    \"lat\": \"string\",\n    \"long\": \"string\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update address for current user",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/health/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health",
+                "ready"
+              ],
+              "variable": [
+                {
+                  "key": "address_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"city\": \"string\",\n  \"street\": \"string\",\n  \"number\": 0,\n  \"zipcode\": \"string\",\n  \"geolocation\": {\n    \"lat\": \"string\",\n    \"long\": \"string\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete address for current user",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/health/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health",
+                "ready"
+              ],
+              "variable": [
+                {
+                  "key": "address_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Liveness probe",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/health/live",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health",
+                "live"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Readiness probe",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/health/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health",
+                "ready"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000"
+    },
+    {
+      "key": "accessToken",
+      "value": "<paste-access-token>"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  }
+}
