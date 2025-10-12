@@ -3,6 +3,11 @@ set -euo pipefail
 
 APP_DIR=${DJANGO_APP_DIR:-backend}
 MANAGE_CMD="python ${APP_DIR}/manage.py"
+migrations_sentinel=${ENTRYPOINT_MIGRATIONS_SENTINEL:-}
+
+if [ -n "$migrations_sentinel" ]; then
+  rm -f "$migrations_sentinel"
+fi
 
 wait_for() {
   host="$1"
@@ -67,6 +72,10 @@ wait_for "$redis_host" "${redis_port:-6379}" "Redis"
 
 echo "Running database migrations..."
 ${MANAGE_CMD} migrate --noinput
+
+if [ -n "$migrations_sentinel" ]; then
+  touch "$migrations_sentinel"
+fi
 
 echo "Launching application: $*"
 exec "$@"

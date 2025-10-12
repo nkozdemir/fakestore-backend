@@ -43,6 +43,7 @@ services:
       GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-30}
       POSTGRES_HOST: ${POSTGRES_HOST:-db}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/1}
+      ENTRYPOINT_MIGRATIONS_SENTINEL: ${ENTRYPOINT_MIGRATIONS_SENTINEL:-/tmp/.migrations-ready}
     depends_on:
       db:
         condition: service_healthy

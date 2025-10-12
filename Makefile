@@ -43,7 +43,22 @@ prod-ps: ## Show running containers for production stack
 
 .PHONY: prod-migrate
 prod-migrate: ## Run Django migrations inside prod web container
-	$(COMPOSE_PROD) exec web python $(DJANGO_MANAGE) migrate
+	$(COMPOSE_PROD) exec web sh -c '\
+		sentinel="$${ENTRYPOINT_MIGRATIONS_SENTINEL:-}"; \
+		if [ -n "$$sentinel" ] && [ ! -f "$$sentinel" ]; then \
+			echo "Waiting for entrypoint migrations to finish (sentinel: $$sentinel)"; \
+			max_wait="$${ENTRYPOINT_MIGRATIONS_WAIT_SECONDS:-180}"; \
+			i=0; \
+			while [ ! -f "$$sentinel" ]; do \
+				if [ "$$max_wait" -gt 0 ] && [ "$$i" -ge "$$max_wait" ]; then \
+					echo "Timed out after $$max_wait seconds waiting for $$sentinel"; \
+					exit 1; \
+				fi; \
+				sleep 1; \
+				i=$$((i+1)); \
+			done; \
+		fi; \
+		python $(DJANGO_MANAGE) migrate'
 
 .PHONY: prod-seed
 prod-seed: ## Seed initial data (management command 'seed_fakestore')
@@ -127,4 +142,3 @@ prod-build-with-schema: prod-build prod-up schema-export ## Build, start, export
 .PHONY: pytest
 pytest: ## Run test suite with pytest
 	pytest -q
-
