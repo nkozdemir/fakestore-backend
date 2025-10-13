@@ -36,16 +36,18 @@ requirements.txt
 Base path: `/api/`
 
 Authentication & Permissions
-- JWT is required for write operations on most resources. Public GETs are allowed unless noted.
+- JWT is required for write operations on most resources. Some read endpoints now require ownership or staff access.
 - Auth endpoints:
   - Public: `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/refresh`
   - Auth required: `GET /api/auth/me`, `POST /api/auth/logout`, `POST /api/auth/logout-all`
 - Products & Categories: Public GETs; POST/PUT/PATCH/DELETE require auth
-- Users: Public GETs; POST/PUT/PATCH/DELETE require auth
-- Carts: Public GETs; POST/PUT/PATCH/DELETE require auth
+- Users: Auth required for all endpoints; only staff/superusers may create users or list all users.
+- Carts: Auth required for all endpoints; cart reads are limited to the owner unless staff/superuser.
 - Special cases:
   - `GET /api/products/by-categories/`: Public
   - Product ratings `GET`: Public summary; `POST`/`DELETE`: Auth required
+  - `GET /api/users/<id>/`: Auth required; user must match the path or be staff/superuser
+  - Cart GET endpoints: Auth required; list requires staff/superuser, detail/user views require the owner or staff/superuser
 
 Attach a JWT access token for protected routes using the `Authorization: Bearer <token>` header.
 
@@ -96,18 +98,18 @@ Pagination (Products list):
 - Auth required: `DELETE /api/categories/<id>/`
 
 ### Users
-- Public: `GET /api/users/`
-- Auth required: `POST /api/users/`
-- Public: `GET /api/users/<id>/`
-- Auth required: `PUT /api/users/<id>/`
-- Auth required: `PATCH /api/users/<id>/`
-- Auth required: `DELETE /api/users/<id>/`
+- Auth required (staff/superuser): `GET /api/users/`
+- Auth required (staff/superuser): `POST /api/users/`
+- Auth required (self or staff/superuser): `GET /api/users/<id>/`
+- Auth required (self or staff/superuser): `PUT /api/users/<id>/`
+- Auth required (self or staff/superuser): `PATCH /api/users/<id>/`
+- Auth required (self or staff/superuser): `DELETE /api/users/<id>/`
 
 ### Carts
-- Public: `GET /api/carts/` (optional `?userId=1`)
-- Public: `GET /api/carts/users/<user_id>/` (list carts for a specific user)
+- Auth required (staff/superuser): `GET /api/carts/` (optional `?userId=1`)
+- Auth required (self or staff/superuser): `GET /api/carts/users/<user_id>/` (list carts for a specific user)
 - Auth required: `POST /api/carts/`
-- Public: `GET /api/carts/<id>/`
+- Auth required (self or staff/superuser): `GET /api/carts/<id>/`
 - Auth required: `PUT /api/carts/<id>/`
 - Auth required: `PATCH /api/carts/<id>/` (advanced item operations)
 - Auth required: `DELETE /api/carts/<id>/`

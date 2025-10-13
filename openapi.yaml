@@ -146,6 +146,7 @@ paths:
     get:
       operationId: carts_list
       summary: List carts
+      description: Requires staff or superuser privileges. Non-privileged callers receive 403.
       parameters:
       - in: query
         name: userId
@@ -156,7 +157,6 @@ paths:
       - Carts
       security:
       - jwtAuth: []
-      - {}
       responses:
         '200':
           content:
@@ -165,6 +165,18 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/CartRead'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
           description: ''
     post:
       operationId: carts_create
@@ -204,6 +216,7 @@ paths:
     get:
       operationId: carts_retrieve
       summary: Get cart
+      description: Requires authentication; only the owner or a staff/superuser may view a cart.
       parameters:
       - in: path
         name: cart_id
@@ -214,13 +227,24 @@ paths:
       - Carts
       security:
       - jwtAuth: []
-      - {}
       responses:
         '200':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CartRead'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
           description: ''
         '404':
           content:
@@ -376,6 +400,7 @@ paths:
     get:
       operationId: carts_users_list
       summary: List carts by user
+      description: Requires authentication; the caller must be that user or a staff/superuser.
       parameters:
       - in: path
         name: user_id
@@ -394,6 +419,18 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/CartRead'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
           description: ''
   /api/categories/:
     get:
@@ -990,7 +1027,6 @@ paths:
       - Users
       security:
       - jwtAuth: []
-      - {}
       responses:
         '200':
           content:
@@ -1003,7 +1039,7 @@ paths:
     post:
       operationId: users_create
       summary: Create user
-      description: Authenticated requests require staff or superuser privileges; anonymous sign-up is permitted.
+      description: Requires authentication and staff or superuser privileges.
       tags:
       - Users
       requestBody:
@@ -1014,7 +1050,6 @@ paths:
         required: true
       security:
       - jwtAuth: []
-      - {}
       responses:
         '201':
           content:
@@ -1023,6 +1058,12 @@ paths:
                 $ref: '#/components/schemas/User'
           description: ''
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
           content:
             application/json:
               schema:
@@ -1038,6 +1079,7 @@ paths:
     get:
       operationId: users_retrieve
       summary: Get user by ID
+      description: Requires authentication; callers must be the user themselves or staff/superuser.
       parameters:
       - in: path
         name: user_id
@@ -1048,13 +1090,24 @@ paths:
       - Users
       security:
       - jwtAuth: []
-      - {}
       responses:
         '200':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/User'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
           description: ''
         '404':
           content:

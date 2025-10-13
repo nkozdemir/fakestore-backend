@@ -2,7 +2,7 @@
   "info": {
     "name": "FakeStore API",
     "description": "FakeStore backend API with layered architecture, JWT auth, and carts/ratings.",
-    "_postman_id": "fbdd65f0-21b6-4025-98ce-326d781cb956",
+    "_postman_id": "1947d6a9-f21b-4cde-8ead-fd85f84aff22",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -245,9 +245,7 @@
                 }
               ]
             },
-            "auth": {
-              "type": "noauth"
-            }
+            "description": "Requires staff or superuser privileges. Non-privileged callers receive 403."
           },
           "response": []
         },
@@ -316,9 +314,7 @@
                 }
               ]
             },
-            "auth": {
-              "type": "noauth"
-            }
+            "description": "Requires authentication; only the owner or a staff/superuser may view a cart."
           },
           "response": []
         },
@@ -472,7 +468,8 @@
                   "description": ""
                 }
               ]
-            }
+            },
+            "description": "Requires authentication; the caller must be that user or a staff/superuser."
           },
           "response": []
         }
@@ -1093,9 +1090,7 @@
                 "users"
               ]
             },
-            "auth": {
-              "type": "noauth"
-            }
+            "description": "Requires staff or superuser privileges."
           },
           "response": []
         },
@@ -1123,10 +1118,7 @@
                 "users"
               ]
             },
-            "description": "Authenticated requests require staff or superuser privileges; anonymous sign-up is permitted.",
-            "auth": {
-              "type": "noauth"
-            },
+            "description": "Requires authentication and staff or superuser privileges.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"user@example.com\",\n  \"username\": \"string\",\n  \"phone\": \"string\",\n  \"first_name\": \"string\",\n  \"last_name\": \"string\",\n  \"password\": \"string\",\n  \"address\": {\n    \"city\": \"string\",\n    \"street\": \"string\",\n    \"number\": 0,\n    \"zipcode\": \"string\",\n    \"geolocation\": {\n      \"lat\": \"string\",\n      \"long\": \"string\"\n    }\n  },\n  \"name\": {\n    \"first_name\": \"string\",\n    \"last_name\": \"string\"\n  }\n}",
@@ -1167,9 +1159,7 @@
                 }
               ]
             },
-            "auth": {
-              "type": "noauth"
-            }
+            "description": "Requires authentication; callers must be the user themselves or staff/superuser."
           },
           "response": []
         },
