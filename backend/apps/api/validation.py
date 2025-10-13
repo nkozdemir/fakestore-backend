@@ -173,6 +173,18 @@ def validate_request_context(request: HttpRequest, view_class, view_kwargs) -> A
     )
 
     if view_name == "CartListView":
+        if request.method in ("GET",):
+            if not _is_authenticated_user(request):
+                logger.warning("CartListView GET requires authentication")
+                return error_response("UNAUTHORIZED", "Authentication required")
+            _set_validated_user(request, int(request.user.id))
+            if not _is_privileged_user(request.user):
+                logger.warning(
+                    "CartListView GET forbidden", user_id=request.user.id
+                )
+                return error_response(
+                    "FORBIDDEN", "You do not have permission to list carts"
+                )
         if request.method in ("POST",):
             if not _is_authenticated_user(request):
                 logger.warning("CartListView POST requires authentication")
@@ -180,14 +192,18 @@ def validate_request_context(request: HttpRequest, view_class, view_kwargs) -> A
             _set_validated_user(request, int(request.user.id))
             logger.debug("Validated cart list user", user_id=request.user.id)
     elif view_name == "CartDetailView":
-        if request.method in ("PUT", "PATCH", "DELETE"):
+        if request.method in ("GET", "PUT", "PATCH", "DELETE"):
             if not _is_authenticated_user(request):
                 logger.warning(
                     "CartDetailView requires authentication", method=request.method
                 )
                 return error_response("UNAUTHORIZED", "Authentication required")
             _set_validated_user(request, int(request.user.id))
-            logger.debug("Validated cart detail user", user_id=request.user.id)
+            logger.debug(
+                "Validated cart detail user",
+                user_id=request.user.id,
+                method=request.method,
+            )
     elif view_name == "ProductRatingView":
         if request.method in ("POST", "DELETE"):
             resp = _resolve_rating_user(request, require=True)
@@ -224,9 +240,12 @@ def validate_request_context(request: HttpRequest, view_class, view_kwargs) -> A
                 )
             request.is_privileged_user = True
         if request.method in ("POST",):
-            if _is_authenticated_user(request) and not _is_privileged_user(request.user):
+            if not _is_authenticated_user(request):
+                logger.warning("UserListView POST requires authentication")
+                return error_response("UNAUTHORIZED", "Authentication required")
+            if not _is_privileged_user(request.user):
                 logger.warning(
-                    "Authenticated non-admin attempted user create",
+                    "UserListView POST forbidden",
                     user_id=getattr(request.user, "id", None),
                 )
                 return error_response(
@@ -312,6 +331,36 @@ def validate_request_context(request: HttpRequest, view_class, view_kwargs) -> A
                 return error_response(
                     "FORBIDDEN",
                     "You do not have permission to manage products",
+                )
+    elif view_name == "CartByUserView":
+        if request.method in ("GET",):
+            if not _is_authenticated_user(request):
+                logger.warning("CartByUserView GET requires authentication")
+                return error_response("UNAUTHORIZED", "Authentication required")
+            actor_id = int(request.user.id)
+            _set_validated_user(request, actor_id)
+            target_user_id = view_kwargs.get("user_id")
+            try:
+                target_user_id = int(target_user_id)
+            except (TypeError, ValueError):
+                logger.warning(
+                    "Invalid user_id in cart-by-user request",
+                    value=target_user_id,
+                )
+                return error_response(
+                    "VALIDATION_ERROR",
+                    "Invalid user identifier",
+                    {"userId": str(target_user_id)},
+                )
+            if not _is_privileged_user(request.user) and actor_id != target_user_id:
+                logger.warning(
+                    "CartByUserView GET forbidden",
+                    actor_id=actor_id,
+                    target_user_id=target_user_id,
+                )
+                return error_response(
+                    "FORBIDDEN",
+                    "You do not have permission to view this user's carts",
                 )
     elif view_name in ("UserAddressListView", "UserAddressDetailView"):
         if not _is_authenticated_user(request):

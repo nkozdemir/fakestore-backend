@@ -47,6 +47,16 @@ class CartListView(APIView):
         responses={200: CartReadSerializer(many=True)},
     )
     def get(self, request):
+        is_privileged = bool(getattr(request, "is_privileged_user", False))
+        actor_id = getattr(request, "validated_user_id", None)
+        if not is_privileged:
+            self.log.warning(
+                "Cart list forbidden",
+                actor_id=actor_id,
+            )
+            return error_response(
+                "FORBIDDEN", "You do not have permission to list carts"
+            )
         # Support both userId (camelCase) and user_id (snake_case)
         user_id_param = request.query_params.get("userId") or request.query_params.get(
             "user_id"
@@ -149,11 +159,29 @@ class CartDetailView(APIView):
         },
     )
     def get(self, request, cart_id: int):
+        actor_id = getattr(request, "validated_user_id", None)
+        is_privileged = bool(getattr(request, "is_privileged_user", False))
+        if actor_id is None and not is_privileged:
+            self.log.warning("Unauthorized cart detail access", cart_id=cart_id)
+            return error_response("UNAUTHORIZED", "Authentication required")
         self.log.debug("Fetching cart detail", cart_id=cart_id)
         dto = self.service.get_cart(cart_id)
         if not dto:
             self.log.info("Cart not found", cart_id=cart_id)
             return error_response("NOT_FOUND", "Cart not found", {"id": str(cart_id)})
+        owner_id = getattr(dto, "user_id", None)
+        if owner_id is None and isinstance(dto, dict):
+            owner_id = dto.get("user_id")
+        if not is_privileged and owner_id != actor_id:
+            self.log.warning(
+                "Cart detail forbidden",
+                cart_id=cart_id,
+                actor_id=actor_id,
+                owner_id=owner_id,
+            )
+            return error_response(
+                "FORBIDDEN", "You do not have permission to view this cart"
+            )
         serializer = CartReadSerializer(dto)
         return Response(serializer.data)
 
@@ -321,6 +349,24 @@ class CartByUserView(APIView):
         responses={200: CartReadSerializer(many=True)},
     )
     def get(self, request, user_id: int):
+        actor_id = getattr(request, "validated_user_id", None)
+        is_privileged = bool(getattr(request, "is_privileged_user", False))
+        if actor_id is None and not is_privileged:
+            self.log.warning(
+                "Unauthorized cart-by-user access attempt",
+                target_user_id=user_id,
+            )
+            return error_response("UNAUTHORIZED", "Authentication required")
+        if not is_privileged and actor_id != int(user_id):
+            self.log.warning(
+                "Cart-by-user forbidden",
+                actor_id=actor_id,
+                target_user_id=user_id,
+            )
+            return error_response(
+                "FORBIDDEN",
+                "You do not have permission to view this user's carts",
+            )
         self.log.debug("Listing carts for user", user_id=user_id)
         data = self.service.list_carts(user_id=user_id)
         serializer = CartReadSerializer(data, many=True)

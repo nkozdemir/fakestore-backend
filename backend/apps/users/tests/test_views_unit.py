@@ -206,12 +206,20 @@ class UserViewsUnitTests(unittest.TestCase):
     def test_user_list_post_success_and_validation_error(self):
         view = UserListView()
         view.service = self.service
-        success_request = DummyRequest({"username": "new"})
+        success_request = DummyRequest(
+            {"username": "new"},
+            user=self._make_user(user_id=1, staff=True),
+            is_privileged_user=True,
+        )
         response_ok = view.post(success_request)
         self.assertEqual(response_ok.status_code, status.HTTP_201_CREATED)
         self.assertEqual(self.service.last_create_payload["username"], "new")
 
-        invalid_request = DummyRequest({"__invalid": True})
+        invalid_request = DummyRequest(
+            {"__invalid": True},
+            user=self._make_user(user_id=1, staff=True),
+            is_privileged_user=True,
+        )
         response_invalid = view.post(invalid_request)
         self.assertEqual(response_invalid.status_code, status.HTTP_400_BAD_REQUEST)
 
@@ -219,7 +227,11 @@ class UserViewsUnitTests(unittest.TestCase):
         view = UserListView()
         view.service = self.service
         self.service.create_result = IntegrityError("duplicate")
-        request = DummyRequest({"username": "duplicate"})
+        request = DummyRequest(
+            {"username": "duplicate"},
+            user=self._make_user(user_id=1, staff=True),
+            is_privileged_user=True,
+        )
         response = view.post(request)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["error"]["code"], "VALIDATION_ERROR")
@@ -240,7 +252,9 @@ class UserViewsUnitTests(unittest.TestCase):
 
         # Not found case
         self.service.get_result = None
-        response_missing = view.get(DummyRequest(), user_id=99)
+        response_missing = view.get(
+            DummyRequest(user=self._make_user(99)), user_id=99
+        )
         self.assertEqual(response_missing.status_code, status.HTTP_404_NOT_FOUND)
 
         # Delete success

@@ -94,6 +94,9 @@ def test_validate_request_user_post_duplicate(mock_user_manager):
     mock_user_manager.filter.return_value.exists.return_value = True
     request = factory.post("/api/users/", {"username": "dup"}, format="json")
     request.data = {"username": "dup"}
+    request.user = types.SimpleNamespace(
+        id=1, is_authenticated=True, is_staff=True, is_superuser=False
+    )
     response = validate_request_context(request, UserListView, {})
     assert response.status_code == 400
     assert response.data["error"]["code"] == "VALIDATION_ERROR"
@@ -308,6 +311,9 @@ def test_validate_request_user_post_unique(mock_user_manager):
     mock_user_manager.filter.return_value.exists.return_value = False
     request = factory.post("/api/users/", {"username": "unique"}, format="json")
     request.data = {"username": "unique"}
+    request.user = types.SimpleNamespace(
+        id=1, is_authenticated=True, is_staff=True, is_superuser=False
+    )
     response = validate_request_context(request, UserListView, {})
     assert response is None
 

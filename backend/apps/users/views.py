@@ -101,18 +101,20 @@ class UserListView(APIView):
     )
     def post(self, request):
         user = getattr(request, "user", None)
-        if user and getattr(user, "is_authenticated", False):
-            is_privileged = bool(
-                getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)
+        if not user or not getattr(user, "is_authenticated", False):
+            self.log.warning("Unauthenticated user attempted to create account")
+            return error_response("UNAUTHORIZED", "Authentication required")
+        is_privileged = bool(
+            getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)
+        )
+        if not is_privileged:
+            self.log.warning(
+                "Authenticated non-privileged user attempted to create account",
+                actor_id=getattr(user, "id", None),
             )
-            if not is_privileged:
-                self.log.warning(
-                    "Authenticated user attempted to create account",
-                    actor_id=getattr(user, "id", None),
-                )
-                return error_response(
-                    "FORBIDDEN", "You do not have permission to create users"
-                )
+            return error_response(
+                "FORBIDDEN", "You do not have permission to create users"
+            )
         serializer = UserSerializer(data=request.data)
         try:
             serializer.is_valid(raise_exception=True)
@@ -149,7 +151,7 @@ class UserDetailView(APIView):
         user = getattr(request, "user", None)
         if not user or not getattr(user, "is_authenticated", False):
             raise PermissionError("unauthenticated")
-        if getattr(user, "id", None) == user_id or getattr(user, "is_staff", False):
+        if getattr(user, "id", None) == user_id or getattr(user, "is_staff", False) or getattr(user, "is_superuser", False):
             return
         raise PermissionError("forbidden")
 
@@ -162,6 +164,20 @@ class UserDetailView(APIView):
         },
     )
     def get(self, request, user_id: int):
+        try:
+            self._ensure_user_access(request, user_id)
+        except PermissionError as exc:
+            if str(exc) == "unauthenticated":
+                self.log.warning("Unauthenticated user detail attempt", user_id=user_id)
+                return error_response("UNAUTHORIZED", "Authentication required")
+            self.log.warning(
+                "User detail forbidden",
+                user_id=user_id,
+                actor_id=getattr(request.user, "id", None),
+            )
+            return error_response(
+                "FORBIDDEN", "You do not have permission to view this user"
+            )
         self.log.debug("Fetching user detail", user_id=user_id)
         dto = self.service.get_user(user_id)
         if not dto:

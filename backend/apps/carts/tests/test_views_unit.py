@@ -48,12 +48,22 @@ class CartViewsUnitTests(unittest.TestCase):
         request.user = user
         force_authenticate(request, user=user)
 
+    @staticmethod
+    def _user(user_id, *, staff=False, superuser=False):
+        return types.SimpleNamespace(
+            id=user_id,
+            is_authenticated=True,
+            is_staff=staff,
+            is_superuser=superuser,
+        )
+
     def test_cart_list_filters_by_user_param(self):
         carts = [make_cart_payload()]
         service_mock = Mock()
         service_mock.list_carts.return_value = carts
         with patch.object(CartListView, "service", service_mock):
             request = self.factory.get("/api/carts/", {"userId": 5})
+            self.authenticate(request, self._user(1, staff=True))
             response = self.dispatch(request, CartListView)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data, carts)
@@ -63,6 +73,7 @@ class CartViewsUnitTests(unittest.TestCase):
         service_mock = Mock()
         with patch.object(CartListView, "service", service_mock):
             request = self.factory.get("/api/carts/", {"userId": "bad"})
+            self.authenticate(request, self._user(1, staff=True))
             response = self.dispatch(request, CartListView)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.data["error"]["code"], "VALIDATION_ERROR")
@@ -128,6 +139,7 @@ class CartViewsUnitTests(unittest.TestCase):
         service_mock.get_cart.return_value = None
         with patch.object(CartDetailView, "service", service_mock):
             request = self.factory.get("/api/carts/1/")
+            self.authenticate(request, self._user(1))
             response = self.dispatch(request, CartDetailView, cart_id=1)
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.data["error"]["code"], "NOT_FOUND")
@@ -138,6 +150,7 @@ class CartViewsUnitTests(unittest.TestCase):
         service_mock.get_cart.return_value = cart
         with patch.object(CartDetailView, "service", service_mock):
             request = self.factory.get("/api/carts/11/")
+            self.authenticate(request, self._user(4))
             response = self.dispatch(request, CartDetailView, cart_id=11)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["id"], 11)
@@ -345,6 +358,7 @@ class CartViewsUnitTests(unittest.TestCase):
         service_mock.list_carts.return_value = carts
         with patch.object(CartByUserView, "service", service_mock):
             request = self.factory.get("/api/users/12/carts/")
+            self.authenticate(request, self._user(12))
             response = self.dispatch(request, CartByUserView, user_id=12)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data, carts)
