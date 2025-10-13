@@ -99,6 +99,31 @@ def test_validate_request_user_post_duplicate(mock_user_manager):
     assert response.data["error"]["code"] == "VALIDATION_ERROR"
 
 
+def test_validate_request_user_get_requires_auth():
+    request = factory.get("/api/users/")
+    response = validate_request_context(request, UserListView, {})
+    assert response.status_code == 401
+
+
+def test_validate_request_user_get_forbidden_for_non_admin():
+    request = factory.get("/api/users/")
+    request.user = types.SimpleNamespace(
+        id=12, is_authenticated=True, is_staff=False, is_superuser=False
+    )
+    response = validate_request_context(request, UserListView, {})
+    assert response.status_code == 403
+
+
+def test_validate_request_user_get_allows_privileged():
+    request = factory.get("/api/users/")
+    request.user = types.SimpleNamespace(
+        id=13, is_authenticated=True, is_staff=True, is_superuser=False
+    )
+    response = validate_request_context(request, UserListView, {})
+    assert response is None
+    assert getattr(request, "is_privileged_user") is True
+
+
 @patch("apps.api.validation.User.objects")
 def test_validate_request_user_put_duplicate_email(mock_user_manager):
     mock_user_manager.filter.return_value.exclude.return_value.exists.return_value = (

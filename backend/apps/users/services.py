@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Dict, Any, Optional
 
+from django.db import transaction
+
 from apps.common import get_logger
 from .dtos import address_to_dto, user_to_dto
 from .models import User
@@ -63,22 +65,34 @@ class UserService:
             return None
         password = data.pop("password", None)
         address_payload = data.pop("address", None)
-        for k, v in data.items():
-            setattr(user, k, v)
-        if password:
-            user.set_password(password)
-        user.save()
-        if address_payload:
-            geo = address_payload.get("geolocation") or {}
-            self.addresses.create(
-                user=user,
-                street=address_payload["street"],
-                number=address_payload["number"],
-                city=address_payload["city"],
-                zipcode=address_payload["zipcode"],
-                latitude=geo.get("lat"),
-                longitude=geo.get("long"),
-            )
+        original_fields = {field: getattr(user, field) for field in data.keys()}
+        original_password = user.password
+        try:
+            with transaction.atomic():
+                for k, v in data.items():
+                    setattr(user, k, v)
+                if password:
+                    user.set_password(password)
+                user.save()
+                if address_payload:
+                    geo = address_payload.get("geolocation") or {}
+                    self.addresses.create(
+                        user=user,
+                        street=address_payload["street"],
+                        number=address_payload["number"],
+                        city=address_payload["city"],
+                        zipcode=address_payload["zipcode"],
+                        latitude=geo.get("lat"),
+                        longitude=geo.get("long"),
+                    )
+        except Exception:
+            for field, value in original_fields.items():
+                setattr(user, field, value)
+            if password:
+                user.password = original_password
+                if hasattr(user, "_password"):
+                    user._password = None
+            raise
         self.logger.info("User updated", user_id=user.id)
         refreshed = self.users.get(id=user_id)
         return user_to_dto(refreshed) if refreshed else user_to_dto(user)

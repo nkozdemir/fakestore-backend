@@ -64,6 +64,27 @@ class UserListView(APIView):
         responses={200: UserSerializer(many=True)},
     )
     def get(self, request):
+        user = getattr(request, "user", None)
+        is_authenticated = bool(
+            user and getattr(user, "is_authenticated", False) and getattr(user, "id", None)
+        )
+        if not is_authenticated:
+            self.log.warning("Unauthorized user list access attempt")
+            return error_response("UNAUTHORIZED", "Authentication required")
+
+        is_privileged = bool(
+            getattr(request, "is_privileged_user", False)
+            or getattr(user, "is_staff", False)
+            or getattr(user, "is_superuser", False)
+        )
+        if not is_privileged:
+            self.log.warning(
+                "Forbidden user list access",
+                user_id=getattr(user, "id", None),
+            )
+            return error_response(
+                "FORBIDDEN", "You do not have permission to list users"
+            )
         self.log.debug("Listing users via API")
         data = self.service.list_users()
         # Use instance for serialization rather than feeding as input data.

@@ -209,6 +209,20 @@ def validate_request_context(request: HttpRequest, view_class, view_kwargs) -> A
             logger.warning("ProductByCategoriesView validation failed")
             return resp
     elif view_name == "UserListView":
+        if request.method in ("GET",):
+            if not _is_authenticated_user(request):
+                logger.warning("UserListView GET requires authentication")
+                return error_response("UNAUTHORIZED", "Authentication required")
+            if not _is_privileged_user(request.user):
+                logger.warning(
+                    "UserListView GET forbidden",
+                    user_id=getattr(request.user, "id", None),
+                )
+                return error_response(
+                    "FORBIDDEN",
+                    "You do not have permission to list users",
+                )
+            request.is_privileged_user = True
         if request.method in ("POST",):
             if _is_authenticated_user(request) and not _is_privileged_user(request.user):
                 logger.warning(

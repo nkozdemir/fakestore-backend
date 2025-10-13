@@ -223,6 +223,43 @@ class CartServiceUnitTests(unittest.TestCase):
         self.assertEqual(updated.items[0].product.id, 1)
         self.assertEqual(updated.items[0].quantity, 2)
 
+    def test_update_cart_reverts_on_error(self):
+        dto = self.service.create_cart(
+            10,
+            {
+                "products": [
+                    {"product_id": 1, "quantity": 2},
+                ],
+                "date": "2024-01-01",
+            },
+        )
+        cart = self.cart_repo.get(id=dto.id)
+        original_date = cart.date
+        original_items = list(cart._items)
+        original_create = self.cart_products_repo.create
+
+        def boom(**kwargs):
+            raise ValueError("boom")
+
+        self.cart_products_repo.create = boom
+        try:
+            with self.assertRaises(ValueError):
+                self.service.update_cart(
+                    dto.id,
+                    {
+                        "date": "2024-03-01",
+                        "items": [{"product_id": 2, "quantity": 5}],
+                    },
+                )
+        finally:
+            self.cart_products_repo.create = original_create
+        cart_after = self.cart_repo.get(id=dto.id)
+        self.assertEqual(cart_after.date, original_date)
+        self.assertEqual(
+            [(item.product.id, item.quantity) for item in cart_after._items],
+            [(item.product.id, item.quantity) for item in original_items],
+        )
+
     def test_patch_operations(self):
         dto = self.service.create_cart(
             7,

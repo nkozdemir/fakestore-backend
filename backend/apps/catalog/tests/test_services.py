@@ -5,6 +5,17 @@ from unittest.mock import patch
 from apps.catalog.services import ProductService, CategoryService
 
 
+class DummyAtomic:
+    def __call__(self, *args, **kwargs):
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+
 class FakeCache:
     def __init__(self):
         self.store = {}
@@ -202,6 +213,11 @@ class ProductServiceUnitTests(unittest.TestCase):
         self.product_repo = FakeProductRepository(self.category_repo)
         self.rating_repo = FakeRatingRepository(self.product_repo)
         self.cache = FakeCache()
+        self.atomic_patcher = patch(
+            "apps.catalog.services.transaction.atomic", DummyAtomic()
+        )
+        self.atomic_patcher.start()
+        self.addCleanup(self.atomic_patcher.stop)
         self.service = ProductService(
             products=self.product_repo,
             ratings=self.rating_repo,
@@ -241,6 +257,34 @@ class ProductServiceUnitTests(unittest.TestCase):
         )
         self.assertEqual(updated.title, "Item2")
         self.assertEqual(updated.price, "2.00")
+
+    def test_update_product_reverts_on_error(self):
+        category = self.category_repo.create(name="Toys")
+        product = self.product_repo.create(
+            title="Item", price="1.00", description="d", image="i"
+        )
+        self.product_repo.set_categories(product, [category.id])
+        original_title = product.title
+        original_categories = [c.id for c in product.categories.all()]
+
+        original_set_categories = self.product_repo.set_categories
+
+        def boom(product_obj, category_ids):
+            raise ValueError("boom")
+
+        self.product_repo.set_categories = boom
+        try:
+            with self.assertRaises(ValueError):
+                self.service.update_product(
+                    product.id,
+                    {"title": "NewTitle", "categories": [category.id]},
+                    partial=True,
+                )
+        finally:
+            self.product_repo.set_categories = original_set_categories
+        stored = self.product_repo.get(id=product.id)
+        self.assertEqual(stored.title, original_title)
+        self.assertEqual([c.id for c in stored.categories.all()], original_categories)
 
     def test_rating_cycle(self):
         product = self.product_repo.create(

@@ -12,9 +12,10 @@ from apps.users.views import (
 
 
 class DummyRequest:
-    def __init__(self, data=None, user=None):
+    def __init__(self, data=None, user=None, is_privileged_user=False):
         self.data = data or {}
         self.user = user
+        self.is_privileged_user = is_privileged_user
 
 
 class FakeUserSerializer:
@@ -179,9 +180,28 @@ class UserViewsUnitTests(unittest.TestCase):
         self.service.list_result = [{"id": 1}]
         view = UserListView()
         view.service = self.service
-        response = view.get(DummyRequest())
+        request = DummyRequest(
+            user=self._make_user(user_id=5, staff=True),
+            is_privileged_user=True,
+        )
+        response = view.get(request)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data, [{"id": 1}])
+
+    def test_user_list_get_requires_authentication(self):
+        view = UserListView()
+        view.service = self.service
+        response = view.get(DummyRequest())
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response.data["error"]["code"], "UNAUTHORIZED")
+
+    def test_user_list_get_forbidden_for_non_privileged_user(self):
+        view = UserListView()
+        view.service = self.service
+        request = DummyRequest(user=self._make_user(user_id=6))
+        response = view.get(request)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data["error"]["code"], "FORBIDDEN")
 
     def test_user_list_post_success_and_validation_error(self):
         view = UserListView()

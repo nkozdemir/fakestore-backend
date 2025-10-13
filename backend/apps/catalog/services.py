@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Optional, Dict, Any, Union
 
+from django.db import transaction
+
 from apps.common import get_logger
 from .mappers import ProductMapper, CategoryMapper
 from .models import Product, Category, Rating
@@ -142,18 +144,44 @@ class ProductService:
                 "Product update failed: not found", product_id=product_id
             )
             return None
-        # Apply changes only if provided (supports partial)
-        self.products.update_scalar(
-            product,
-            title=cmd.title,
-            price=cmd.price,
-            description=cmd.description,
-            image=cmd.image,
-            rate=cmd.rate,
-            count=cmd.count,
-        )
+        update_kwargs: Dict[str, Any] = {
+            "title": cmd.title,
+            "price": cmd.price,
+            "description": cmd.description,
+            "image": cmd.image,
+            "rate": cmd.rate,
+            "count": cmd.count,
+        }
+        original_fields = {
+            field: getattr(product, field)
+            for field, value in update_kwargs.items()
+            if value is not None
+        }
+        original_categories = None
         if cmd.categories is not None:
-            self.products.set_categories(product, cmd.categories)
+            try:
+                original_categories = list(product.categories.all())
+            except Exception:
+                original_categories = None
+        try:
+            with transaction.atomic():
+                self.products.update_scalar(product, **update_kwargs)
+                if cmd.categories is not None:
+                    self.products.set_categories(product, cmd.categories)
+        except Exception:
+            for field, value in original_fields.items():
+                setattr(product, field, value)
+            if (
+                cmd.categories is not None
+                and original_categories is not None
+                and hasattr(product, "categories")
+            ):
+                try:
+                    product.categories.set(original_categories)
+                except Exception:
+                    # Best effort restore, do not mask original error.
+                    pass
+            raise
         self._bump_cache_version()
         self.logger.info("Product updated", product_id=product_id)
         return ProductMapper.to_dto(product)

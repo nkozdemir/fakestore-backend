@@ -92,10 +92,43 @@ class CartService:
             )
             return None
         command = CartUpdateCommand.from_raw(cart_id, data)
-        with transaction.atomic():
-            self.carts.update_scalar(cart, user_id=command.user_id, date=command.date)
+        update_kwargs: Dict[str, Any] = {
+            "user_id": command.user_id,
+            "date": command.date,
+        }
+        original_fields = {
+            field: getattr(cart, field)
+            for field, value in update_kwargs.items()
+            if value is not None
+        }
+        original_items_snapshot = None
+        if command.items is not None:
+            if hasattr(cart, "_items"):
+                original_items_snapshot = list(cart._items)
+            else:
+                try:
+                    original_items_snapshot = list(
+                        self.cart_products.list_for_cart(cart.id)
+                    )
+                except Exception:
+                    original_items_snapshot = None
+        try:
+            with transaction.atomic():
+                self.carts.update_scalar(cart, **update_kwargs)
+                if command.items is not None:
+                    self._rebuild_items(cart, command.items)
+        except Exception:
+            for field, value in original_fields.items():
+                setattr(cart, field, value)
             if command.items is not None:
-                self._rebuild_items(cart, command.items)
+                if hasattr(cart, "_items"):
+                    cart._items = list(original_items_snapshot or [])
+                elif hasattr(cart, "refresh_from_db"):
+                    try:
+                        cart.refresh_from_db()
+                    except Exception:
+                        pass
+            raise
         refreshed = self.carts.get(id=cart_id)
         self.logger.info("Cart updated", cart_id=cart_id, user_id=user_id)
         return self.cart_mapper.to_dto(refreshed) if refreshed else None

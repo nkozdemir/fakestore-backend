@@ -3,6 +3,17 @@ from unittest.mock import patch
 from apps.users.services import UserService
 
 
+class DummyAtomic:
+    def __call__(self, *args, **kwargs):
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+
 class FakeAddress:
     def __init__(self, address_id, user, **data):
         self.id = address_id
@@ -124,10 +135,17 @@ class UserServiceUnitTests(unittest.TestCase):
     def setUp(self):
         self.user_repo = FakeUserRepository()
         self.address_repo = FakeAddressRepository()
+        self.atomic_patcher = patch(
+            "apps.users.services.transaction.atomic", DummyAtomic()
+        )
+        self.atomic_patcher.start()
         self.service = UserService(
             users=self.user_repo,
             addresses=self.address_repo,
         )
+
+    def tearDown(self):
+        self.atomic_patcher.stop()
 
     def _user_to_dict(self, user):
         return {
@@ -178,6 +196,37 @@ class UserServiceUnitTests(unittest.TestCase):
     def test_update_user_returns_none_for_missing_user(self):
         result = self.service.update_user(99, {"username": "ghost"})
         self.assertIsNone(result)
+
+    def test_update_user_reverts_changes_when_address_creation_fails(self):
+        user = self.user_repo.create_user(
+            username="dave", email="dave@example.com", phone="123"
+        )
+        original_username = user.username
+        original_phone = user.phone
+
+        def boom(**kwargs):
+            raise ValueError("boom")
+
+        self.address_repo.create = boom
+        with self.assertRaises(ValueError):
+            self.service.update_user(
+                user.id,
+                {
+                    "username": "newdave",
+                    "phone": "999",
+                    "address": {
+                        "street": "Main",
+                        "number": 1,
+                        "city": "Town",
+                        "zipcode": "00000",
+                        "geolocation": {"lat": "1.0", "long": "2.0"},
+                    },
+                },
+            )
+        stored = self.user_repo.get(id=user.id)
+        self.assertEqual(stored.username, original_username)
+        self.assertEqual(stored.phone, original_phone)
+        self.assertEqual(stored.addresses.all(), [])
 
     @patch("apps.users.services.user_to_dto")
     def test_delete_user_and_list_users(self, mock_user_to_dto):

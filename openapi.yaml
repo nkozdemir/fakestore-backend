@@ -985,6 +985,7 @@ paths:
     get:
       operationId: users_list
       summary: List users
+      description: Requires staff or superuser privileges.
       tags:
       - Users
       security:
