@@ -89,15 +89,24 @@ class CartListView(APIView):
         summary="Create cart",
         description=(
             "Creates a new cart for the authenticated user. The user is derived from the JWT in the "
-            "Authorization header. Regular users should not include userId in the request body; staff or "
-            "superusers may specify userId to create carts for other users. Optionally include initial "
-            "products to seed line items."
+            "Authorization header. Staff or superusers may pass userId as a query parameter to create carts "
+            "for other users. Optionally include initial products to seed line items."
         ),
+        parameters=[
+            OpenApiParameter(
+                name="userId",
+                description="Override the target user when the caller is privileged",
+                required=False,
+                type=int,
+                location=OpenApiParameter.QUERY,
+            )
+        ],
         request=CartCreateSerializer,
         responses={
             201: CartReadSerializer,
             400: OpenApiResponse(response=ErrorResponseSerializer),
             401: OpenApiResponse(response=ErrorResponseSerializer),
+            403: OpenApiResponse(response=ErrorResponseSerializer),
         },
     )
     def post(self, request):
@@ -110,13 +119,15 @@ class CartListView(APIView):
         is_privileged = bool(getattr(request, "is_privileged_user", False))
         payload = dict(serializer.validated_data)
         target_user_id = user_id
-        if is_privileged and "userId" in serializer.validated_data:
-            raw_user_id = serializer.validated_data.get("userId")
+        raw_user_id = request.query_params.get("userId") or request.query_params.get(
+            "user_id"
+        )
+        if raw_user_id is not None:
             try:
-                target_user_id = int(raw_user_id)
+                desired_user_id = int(raw_user_id)
             except (TypeError, ValueError):
                 self.log.warning(
-                    "Invalid userId provided for cart creation",
+                    "Invalid userId query parameter provided for cart creation",
                     raw_value=raw_user_id,
                 )
                 return error_response(
@@ -124,7 +135,19 @@ class CartListView(APIView):
                     "userId must be an integer",
                     {"userId": raw_user_id},
                 )
-        payload.pop("userId", None)
+            if is_privileged:
+                target_user_id = desired_user_id
+            elif desired_user_id != user_id:
+                self.log.warning(
+                    "Cart creation forbidden for non-privileged override",
+                    actor_id=user_id,
+                    desired_user_id=desired_user_id,
+                )
+                return error_response(
+                    "FORBIDDEN",
+                    "You do not have permission to create carts for other users",
+                    {"userId": str(desired_user_id)},
+                )
         self.log.info(
             "Creating cart via API",
             user_id=target_user_id,

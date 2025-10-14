@@ -62,3 +62,18 @@ class ProductWriteSerializer(serializers.Serializer):
     rate = serializers.FloatField(required=False)
     count = serializers.IntegerField(required=False)
     categories = serializers.ListField(child=serializers.IntegerField(), required=False)
+
+
+class ProductRatingUserSerializer(serializers.Serializer):
+    id = serializers.IntegerField(required=False, allow_null=True)
+    firstName = serializers.CharField(required=False, allow_null=True)
+    lastName = serializers.CharField(required=False, allow_null=True)
+    value = serializers.IntegerField()
+    createdAt = serializers.CharField(required=False, allow_null=True)
+    updatedAt = serializers.CharField(required=False, allow_null=True)
+
+
+class ProductRatingsListSerializer(serializers.Serializer):
+    productId = serializers.IntegerField()
+    count = serializers.IntegerField()
+    ratings = ProductRatingUserSerializer(many=True)

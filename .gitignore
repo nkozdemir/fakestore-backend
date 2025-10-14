@@ -84,8 +84,6 @@ Icon?
 *.pid
 # Ignore docker build artifacts if any temp dirs are used
 /tmp/docker-build/
-Dockerfile.dev
-docker-compose.dev.yml
 
 # Coverage / Reports
 coverage.xml

@@ -123,16 +123,30 @@ class CartViewsUnitTests(unittest.TestCase):
         payload = {
             "date": "2025-02-01",
             "products": [{"product_id": 2, "quantity": 1}],
-            "userId": 99,
         }
         with patch.object(CartListView, "service", service_mock):
-            request = self.factory.post("/api/carts/", payload, format="json")
+            request = self.factory.post("/api/carts/?userId=99", payload, format="json")
             self.authenticate(request, admin)
             response = self.dispatch(request, CartListView)
         self.assertEqual(response.status_code, 201)
         args, _ = service_mock.create_cart.call_args
         self.assertEqual(args[0], 99)
         self.assertNotIn("userId", args[1])
+
+    def test_cart_list_post_non_admin_cannot_create_for_other_user(self):
+        service_mock = Mock()
+        service_mock.create_cart.return_value = make_cart_payload(cart_id=6, user_id=3)
+        user = types.SimpleNamespace(
+            id=3, is_authenticated=True, is_staff=False, is_superuser=False
+        )
+        payload = {"products": [{"product_id": 4, "quantity": 1}]}
+        with patch.object(CartListView, "service", service_mock):
+            request = self.factory.post("/api/carts/?userId=9", payload, format="json")
+            self.authenticate(request, user)
+            response = self.dispatch(request, CartListView)
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.data["error"]["code"], "FORBIDDEN")
+        service_mock.create_cart.assert_not_called()
 
     def test_cart_detail_get_not_found_returns_error(self):
         service_mock = Mock()

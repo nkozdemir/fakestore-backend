@@ -158,11 +158,12 @@ class FakeProductRepository:
 
 
 class StubRating:
-    def __init__(self, repo, product_id: int, user_id: int, value: int):
+    def __init__(self, repo, product_id: int, user_id: int, value: int, rating_id: int):
         self._repo = repo
         self.product_id = product_id
         self.user_id = user_id
         self.value = value
+        self.id = rating_id
 
     def save(self):
         self._repo._set_rating(self.product_id, self.user_id, self.value)
@@ -175,26 +176,62 @@ class FakeRatingRepository:
     def __init__(self, product_repo: FakeProductRepository):
         self.product_repo = product_repo
         self._ratings = {}
+        self._pk = 1
 
     def for_product_user(self, product_id: int, user_id: int):
         key = (product_id, user_id)
         value = self._ratings.get(key)
         if value is None:
             return None
-        return StubRating(self, product_id, user_id, value)
+        return StubRating(self, product_id, user_id, value["value"], value["id"])
+
+    def get(self, **filters):
+        rating_id = filters.get("id")
+        product_id = filters.get("product_id")
+        for (pid, uid), data in self._ratings.items():
+            if rating_id is not None and data["id"] != rating_id:
+                continue
+            if product_id is not None and pid != product_id:
+                continue
+            return StubRating(self, pid, uid, data["value"], data["id"])
+        return None
 
     def create(self, **data):
         product_id = data["product_id"]
         user_id = data["user_id"]
         value = data["value"]
-        self._ratings[(product_id, user_id)] = value
+        rating_id = self._pk
+        self._pk += 1
+        self._ratings[(product_id, user_id)] = {"id": rating_id, "value": value}
         product = self.product_repo.get(id=product_id)
         product._ratings[user_id] = value
         self.product_repo.recalculate_rating(product)
-        return StubRating(self, product_id, user_id, value)
+        return StubRating(self, product_id, user_id, value, rating_id)
+
+    def list_for_product(self, product_id: int):
+        results = []
+        for (pid, uid), value in self._ratings.items():
+            if pid == product_id:
+                results.append(
+                    types.SimpleNamespace(
+                        id=value["id"],
+                        product_id=pid,
+                        user_id=uid,
+                        value=value["value"],
+                        created_at=None,
+                        updated_at=None,
+                    )
+                )
+        return results
 
     def _set_rating(self, product_id: int, user_id: int, value: int):
-        self._ratings[(product_id, user_id)] = value
+        rating = self._ratings.get((product_id, user_id))
+        if rating is None:
+            rating_id = self._pk
+            self._pk += 1
+        else:
+            rating_id = rating["id"]
+        self._ratings[(product_id, user_id)] = {"id": rating_id, "value": value}
         product = self.product_repo.get(id=product_id)
         product._ratings[user_id] = value
         self.product_repo.recalculate_rating(product)
@@ -205,6 +242,9 @@ class FakeRatingRepository:
         if product and user_id in product._ratings:
             product._ratings.pop(user_id)
             self.product_repo.recalculate_rating(product)
+
+    def delete(self, rating):
+        self._delete_rating(rating.product_id, rating.user_id)
 
 
 class ProductServiceUnitTests(unittest.TestCase):
@@ -296,8 +336,55 @@ class ProductServiceUnitTests(unittest.TestCase):
         self.assertEqual(summary["rating"]["rate"], 4.0)
         summary = self.service.set_user_rating(product.id, user_id=user_id, value=5)
         self.assertEqual(summary["rating"]["rate"], 5.0)
-        summary = self.service.delete_user_rating(product.id, user_id=user_id)
+        rating_record = self.rating_repo.for_product_user(product.id, user_id)
+        summary = self.service.delete_rating(
+            product.id,
+            rating_record.id,
+            actor_user_id=user_id,
+            is_privileged=False,
+        )
         self.assertEqual(summary["rating"]["count"], 0)
+
+    def test_list_product_ratings_returns_entries(self):
+        product = self.product_repo.create(
+            title="Rated", price="5.00", description="d", image="i"
+        )
+        self.service.set_user_rating(product.id, user_id=1, value=4)
+        self.service.set_user_rating(product.id, user_id=2, value=5)
+        self.mock_user_objects.filter.return_value.values.return_value = [
+            {
+                "id": 1,
+                "username": "alice",
+                "email": "alice@example.com",
+                "first_name": "Alice",
+                "last_name": "A",
+            },
+            {
+                "id": 2,
+                "username": "bob",
+                "email": "bob@example.com",
+                "first_name": "Bob",
+                "last_name": "B",
+            },
+        ]
+        result = self.service.list_product_ratings(product.id)
+        self.assertEqual(result["productId"], product.id)
+        self.assertEqual(result["count"], 2)
+        for entry in result["ratings"]:
+            self.assertIsNotNone(entry.get("id"))
+            self.assertIn("value", entry)
+            self.assertNotIn("userId", entry)
+            self.assertNotIn("username", entry)
+            self.assertNotIn("email", entry)
+        names = {(r.get("firstName"), r.get("lastName")) for r in result["ratings"]}
+        self.assertTrue(
+            {("Alice", "A"), ("Bob", "B")}.issuperset(names)
+        )
+
+    def test_list_product_ratings_missing_product(self):
+        result = self.service.list_product_ratings(999)
+        self.assertEqual(result[0], "NOT_FOUND")
+        self.assertIn("id", result[2])
 
     def test_list_products_cache_hit(self):
         service_cache = ProductService(
@@ -366,17 +453,39 @@ class ProductServiceUnitTests(unittest.TestCase):
         self.assertIn("userId", result[2])
         self.mock_user_objects.filter.return_value.exists.return_value = True
 
-    def test_rating_delete_missing_user_returns_error(self):
+    def test_delete_rating_forbidden_for_non_owner(self):
         product = self.product_repo.create(
             title="Rated", price="5.00", description="d", image="i"
         )
-        missing_user_id = self.rating_user_id + 500
-        self.mock_user_objects.filter.return_value.exists.return_value = False
-        result = self.service.delete_user_rating(product.id, user_id=missing_user_id)
+        self.service.set_user_rating(product.id, user_id=1, value=4)
+        rating_record = self.rating_repo.for_product_user(product.id, 1)
+        result = self.service.delete_rating(
+            product.id, rating_record.id, actor_user_id=2, is_privileged=False
+        )
+        self.assertEqual(result[0], "FORBIDDEN")
+        self.assertIn("ratingId", result[2])
+
+    def test_delete_rating_allows_privileged_override(self):
+        product = self.product_repo.create(
+            title="Rated", price="5.00", description="d", image="i"
+        )
+        self.service.set_user_rating(product.id, user_id=1, value=4)
+        rating_record = self.rating_repo.for_product_user(product.id, 1)
+        result = self.service.delete_rating(
+            product.id, rating_record.id, actor_user_id=99, is_privileged=True
+        )
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result["rating"]["count"], 0)
+
+    def test_delete_rating_not_found(self):
+        product = self.product_repo.create(
+            title="Rated", price="5.00", description="d", image="i"
+        )
+        result = self.service.delete_rating(
+            product.id, rating_id=999, actor_user_id=self.rating_user_id, is_privileged=False
+        )
         self.assertEqual(result[0], "NOT_FOUND")
-        self.assertEqual(result[1], "User not found")
-        self.assertIn("userId", result[2])
-        self.mock_user_objects.filter.return_value.exists.return_value = True
+        self.assertIn("ratingId", result[2])
 
 
 class CategoryServiceUnitTests(unittest.TestCase):

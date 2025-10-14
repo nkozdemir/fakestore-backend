@@ -224,6 +224,64 @@ class ProductService:
             "userRating": user_rating,
         }
 
+    def list_product_ratings(self, product_id: int):
+        product = self.products.get(id=product_id)
+        if not product:
+            self.logger.info(
+                "Product ratings requested for missing product",
+                product_id=product_id,
+            )
+            return ("NOT_FOUND", "Product not found", {"id": product_id})
+        ratings = list(self.ratings.list_for_product(product_id))
+        user_ids = {
+            getattr(rating, "user_id", None)
+            for rating in ratings
+            if getattr(rating, "user_id", None) is not None
+        }
+        user_map = {}
+        if user_ids:
+            users = User.objects.filter(id__in=user_ids).values(
+                "id", "first_name", "last_name"
+            )
+            user_map = {user["id"]: user for user in users}
+        entries: List[Dict[str, Any]] = []
+        for rating in ratings:
+            rating_user_id = getattr(rating, "user_id", None)
+            user_payload = user_map.get(rating_user_id)
+            if not user_payload and hasattr(rating, "user"):
+                user_obj = getattr(rating, "user", None)
+                if user_obj is not None:
+                    user_payload = {
+                        "first_name": getattr(user_obj, "first_name", None),
+                        "last_name": getattr(user_obj, "last_name", None),
+                    }
+            created_at = getattr(rating, "created_at", None)
+            updated_at = getattr(rating, "updated_at", None)
+            entry: Dict[str, Any] = {
+                "id": getattr(rating, "id", None),
+                "value": getattr(rating, "value", None),
+                "createdAt": created_at.isoformat() if created_at else None,
+                "updatedAt": updated_at.isoformat() if updated_at else None,
+            }
+            if user_payload:
+                entry.update(
+                    {
+                        "firstName": user_payload.get("first_name"),
+                        "lastName": user_payload.get("last_name"),
+                    }
+                )
+            entries.append(entry)
+        self.logger.debug(
+            "Returning product ratings",
+            product_id=product_id,
+            count=len(entries),
+        )
+        return {
+            "productId": product_id,
+            "count": len(entries),
+            "ratings": entries,
+        }
+
     def set_user_rating(
         self, product_id: int, user_id: int, value: Union[int, RatingSetCommand]
     ):
@@ -280,35 +338,70 @@ class ProductService:
         self.products.recalculate_rating(product)
         return self.get_rating_summary(product_id, user_id)
 
-    def delete_user_rating(self, product_id: int, user_id: int):
-        product = self.products.get(id=product_id)
-        if not product:
+    def delete_rating(
+        self,
+        product_id: int,
+        rating_id: int,
+        actor_user_id: Optional[int],
+        is_privileged: bool,
+    ):
+        self.logger.info(
+            "Deleting rating",
+            product_id=product_id,
+            rating_id=rating_id,
+            actor_user_id=actor_user_id,
+            privileged=is_privileged,
+        )
+        rating = self.ratings.get(id=rating_id, product_id=product_id)
+        if not rating:
             self.logger.warning(
-                "Rating delete failed: product not found",
+                "Rating delete failed: not found",
                 product_id=product_id,
-                user_id=user_id,
+                rating_id=rating_id,
             )
-            return ("NOT_FOUND", "Product not found", {"id": product_id})
-        if not User.objects.filter(id=user_id).exists():
-            self.logger.warning(
-                "Rating delete failed: user not found",
-                product_id=product_id,
-                user_id=user_id,
-            )
-            return ("NOT_FOUND", "User not found", {"userId": user_id})
-        existing = self.ratings.for_product_user(product_id, user_id)
-        if not existing:
-            # Idempotent delete - still return summary
-            self.logger.info(
-                "No rating to delete; returning summary",
-                product_id=product_id,
-                user_id=user_id,
-            )
-            return self.get_rating_summary(product_id, user_id)
-        existing.delete()
-        self.logger.info("Deleted rating", product_id=product_id, user_id=user_id)
+            return ("NOT_FOUND", "Rating not found", {"ratingId": rating_id})
+        owner_user_id = getattr(rating, "user_id", None)
+        if not is_privileged:
+            if actor_user_id is None or owner_user_id != actor_user_id:
+                self.logger.warning(
+                    "Rating delete forbidden",
+                    product_id=product_id,
+                    rating_id=rating_id,
+                    actor_user_id=actor_user_id,
+                    owner_user_id=owner_user_id,
+                )
+                return (
+                    "FORBIDDEN",
+                    "You do not have permission to delete this rating",
+                    {"ratingId": rating_id},
+                )
+        product = getattr(rating, "product", None)
+        if product is None:
+            product = self.products.get(id=product_id)
+            if not product:
+                self.logger.warning(
+                    "Rating delete failed: product not found",
+                    product_id=product_id,
+                    rating_id=rating_id,
+                )
+                return ("NOT_FOUND", "Product not found", {"id": product_id})
+        self.ratings.delete(rating)
         self.products.recalculate_rating(product)
-        return self.get_rating_summary(product_id, user_id)
+        summary_user_id = actor_user_id if not is_privileged else actor_user_id
+        summary = self.get_rating_summary(product_id, summary_user_id)
+        if summary is None:
+            summary = {
+                "productId": product_id,
+                "rating": {"rate": float(product.rate), "count": product.count},
+                "userRating": None,
+            }
+        self.logger.info(
+            "Deleted rating",
+            product_id=product_id,
+            rating_id=rating_id,
+            actor_user_id=actor_user_id,
+        )
+        return summary
 
 
 class CategoryService:

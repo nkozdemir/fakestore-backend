@@ -8,6 +8,7 @@ from .serializers import (
     ProductReadSerializer,
     ProductWriteSerializer,
     CategorySerializer,
+    ProductRatingsListSerializer,
 )
 from apps.api.utils import error_response
 from .pagination import ProductListPagination
@@ -325,6 +326,48 @@ class CategoryDetailView(APIView):
 
 
 @extend_schema(tags=["Catalog", "Ratings"])
+class ProductRatingListView(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+    service = build_product_service()
+    log = logger.bind(view="ProductRatingListView")
+
+    @extend_schema(
+        summary="List product ratings",
+        parameters=[
+            OpenApiParameter(
+                "product_id",
+                int,
+                OpenApiParameter.PATH,
+                description="Target product identifier",
+            )
+        ],
+        responses={
+            200: ProductRatingsListSerializer,
+            404: OpenApiResponse(response=ErrorResponseSerializer),
+        },
+    )
+    def get(self, request, product_id: int):
+        user = getattr(request, "user", None)
+        self.log.debug(
+            "Listing product ratings",
+            product_id=product_id,
+            actor_id=getattr(user, "id", None) if user else None,
+        )
+        result = self.service.list_product_ratings(product_id)
+        if isinstance(result, tuple):
+            code, msg, details = result
+            self.log.warning(
+                "Product ratings list failed",
+                product_id=product_id,
+                code=code,
+                detail=msg,
+            )
+            return error_response(code, msg, details)
+        serializer = ProductRatingsListSerializer(result)
+        return Response(serializer.data)
+
+
+@extend_schema(tags=["Catalog", "Ratings"])
 class ProductRatingView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
     service = build_product_service()
@@ -338,19 +381,72 @@ class ProductRatingView(APIView):
         parameters=[
             OpenApiParameter(
                 name="userId",
-                description="User ID (optional fallback when not authenticated)",
+                description=(
+                    "User ID override. Required for anonymous callers and available "
+                    "to privileged users to view ratings on behalf of others."
+                ),
                 required=False,
                 type=int,
             )
         ],
-        responses={200: None, 404: OpenApiResponse(response=ErrorResponseSerializer)},
+        responses={
+            200: None,
+            400: OpenApiResponse(response=ErrorResponseSerializer),
+            403: OpenApiResponse(response=ErrorResponseSerializer),
+            404: OpenApiResponse(response=ErrorResponseSerializer),
+        },
     )
     def get(self, request, product_id: int):
         user_id = self._current_user_id(request)
-        self.log.debug(
-            "Fetching rating summary", product_id=product_id, user_id=user_id
+        user = getattr(request, "user", None)
+        actor_id = getattr(user, "id", None)
+        is_privileged = bool(
+            getattr(request, "is_privileged_user", False)
+            or getattr(user, "is_staff", False)
+            or getattr(user, "is_superuser", False)
         )
-        summary = self.service.get_rating_summary(product_id, user_id)
+        target_user_id = user_id
+        raw_user_id = request.query_params.get("userId") or request.query_params.get(
+            "user_id"
+        )
+        if raw_user_id is not None:
+            try:
+                desired_user_id = int(raw_user_id)
+            except (TypeError, ValueError):
+                self.log.warning(
+                    "Invalid userId query parameter provided for rating summary",
+                    product_id=product_id,
+                    actor_id=actor_id,
+                    raw_value=raw_user_id,
+                )
+                return error_response(
+                    "VALIDATION_ERROR",
+                    "userId must be an integer",
+                    {"userId": raw_user_id},
+                )
+            if is_privileged:
+                target_user_id = desired_user_id
+            elif user_id is None or desired_user_id != user_id:
+                self.log.warning(
+                    "Rating summary forbidden for non-privileged override",
+                    product_id=product_id,
+                    actor_id=actor_id,
+                    requested_user_id=desired_user_id,
+                    resolved_user_id=user_id,
+                )
+                return error_response(
+                    "FORBIDDEN",
+                    "You do not have permission to view ratings for other users",
+                    {"userId": str(desired_user_id)},
+                )
+        self.log.debug(
+            "Fetching rating summary",
+            product_id=product_id,
+            user_id=target_user_id,
+            actor_id=actor_id,
+            privileged=is_privileged,
+        )
+        summary = self.service.get_rating_summary(product_id, target_user_id)
         if summary is None:
             self.log.info(
                 "Rating summary failed: product not found", product_id=product_id
@@ -365,7 +461,10 @@ class ProductRatingView(APIView):
         parameters=[
             OpenApiParameter(
                 name="userId",
-                description="User ID (optional fallback when not authenticated)",
+                description=(
+                    "User ID override. Required for anonymous callers and available "
+                    "to privileged users to rate on behalf of others."
+                ),
                 required=False,
                 type=int,
             )
@@ -379,6 +478,56 @@ class ProductRatingView(APIView):
     )
     def post(self, request, product_id: int):
         user_id = self._current_user_id(request)
+        user = getattr(request, "user", None)
+        actor_id = getattr(user, "id", None)
+        is_privileged = bool(
+            getattr(request, "is_privileged_user", False)
+            or getattr(user, "is_staff", False)
+            or getattr(user, "is_superuser", False)
+        )
+        target_user_id = user_id
+        raw_user_id = request.query_params.get("userId") or request.query_params.get(
+            "user_id"
+        )
+        if raw_user_id is not None:
+            try:
+                desired_user_id = int(raw_user_id)
+            except (TypeError, ValueError):
+                self.log.warning(
+                    "Invalid userId query parameter provided for rating",
+                    product_id=product_id,
+                    actor_id=actor_id,
+                    raw_value=raw_user_id,
+                )
+                return error_response(
+                    "VALIDATION_ERROR",
+                    "userId must be an integer",
+                    {"userId": raw_user_id},
+                )
+            if is_privileged:
+                target_user_id = desired_user_id
+            elif user_id is None or desired_user_id != user_id:
+                self.log.warning(
+                    "Rating creation forbidden for non-privileged override",
+                    product_id=product_id,
+                    actor_id=actor_id,
+                    requested_user_id=desired_user_id,
+                    resolved_user_id=user_id,
+                )
+                return error_response(
+                    "FORBIDDEN",
+                    "You do not have permission to rate on behalf of other users",
+                    {"userId": str(desired_user_id)},
+                )
+        if target_user_id is None:
+            self.log.warning(
+                "Rating creation missing user identifier",
+                product_id=product_id,
+                actor_id=actor_id,
+            )
+            return error_response(
+                "VALIDATION_ERROR", "Authentication required", {"userId": None}
+            )
         value = request.data.get("value")
         try:
             value = int(value)
@@ -386,7 +535,7 @@ class ProductRatingView(APIView):
             self.log.warning(
                 "Invalid rating payload",
                 product_id=product_id,
-                user_id=user_id,
+                user_id=target_user_id,
                 value=value,
             )
             return error_response(
@@ -395,16 +544,18 @@ class ProductRatingView(APIView):
         self.log.info(
             "Setting product rating",
             product_id=product_id,
-            user_id=user_id,
+            user_id=target_user_id,
+            actor_id=actor_id,
+            privileged=is_privileged,
             value=value,
         )
-        result = self.service.set_user_rating(product_id, user_id, value)
+        result = self.service.set_user_rating(product_id, target_user_id, value)
         if isinstance(result, tuple):
             code, msg, details = result
             self.log.warning(
                 "Rating update failed",
                 product_id=product_id,
-                user_id=user_id,
+                user_id=target_user_id,
                 code=code,
                 detail=msg,
             )
@@ -412,31 +563,75 @@ class ProductRatingView(APIView):
         return Response(result, status=status.HTTP_201_CREATED)
 
     @extend_schema(
-        summary="Delete user rating",
+        summary="Delete rating",
         parameters=[
             OpenApiParameter(
-                name="userId",
-                description="User ID (optional fallback when not authenticated)",
-                required=False,
+                name="ratingId",
+                description="Rating identifier to delete",
+                required=True,
                 type=int,
             )
         ],
         responses={
             200: None,
             400: OpenApiResponse(response=ErrorResponseSerializer),
+            403: OpenApiResponse(response=ErrorResponseSerializer),
             404: OpenApiResponse(response=ErrorResponseSerializer),
         },
     )
     def delete(self, request, product_id: int):
         user_id = self._current_user_id(request)
-        self.log.info("Deleting rating", product_id=product_id, user_id=user_id)
-        result = self.service.delete_user_rating(product_id, user_id)
+        user = getattr(request, "user", None)
+        actor_id = getattr(user, "id", None)
+        is_privileged = bool(
+            getattr(request, "is_privileged_user", False)
+            or getattr(user, "is_staff", False)
+            or getattr(user, "is_superuser", False)
+        )
+        raw_rating_id = request.query_params.get("ratingId") or request.query_params.get(
+            "rating_id"
+        )
+        if raw_rating_id is None:
+            self.log.warning(
+                "Rating delete missing identifier",
+                product_id=product_id,
+                actor_id=actor_id,
+            )
+            return error_response(
+                "VALIDATION_ERROR", "ratingId is required", {"ratingId": None}
+            )
+        try:
+            rating_id = int(raw_rating_id)
+        except (TypeError, ValueError):
+            self.log.warning(
+                "Invalid ratingId parameter",
+                product_id=product_id,
+                actor_id=actor_id,
+                raw_value=raw_rating_id,
+            )
+            return error_response(
+                "VALIDATION_ERROR",
+                "ratingId must be an integer",
+                {"ratingId": raw_rating_id},
+            )
+        effective_actor_id = user_id if user_id is not None else actor_id
+        self.log.info(
+            "Deleting rating",
+            product_id=product_id,
+            rating_id=rating_id,
+            actor_id=effective_actor_id,
+            privileged=is_privileged,
+        )
+        result = self.service.delete_rating(
+            product_id, rating_id, effective_actor_id, is_privileged
+        )
         if isinstance(result, tuple):
             code, msg, details = result
             self.log.warning(
                 "Rating delete failed",
                 product_id=product_id,
-                user_id=user_id,
+                rating_id=rating_id,
+                actor_id=effective_actor_id,
                 code=code,
                 detail=msg,
             )

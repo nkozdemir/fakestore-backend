@@ -45,7 +45,7 @@ Authentication & Permissions
 - Carts: Auth required for all endpoints; cart reads are limited to the owner unless staff/superuser.
 - Special cases:
   - `GET /api/products/by-categories/`: Public
-  - Product ratings `GET`: Public summary; `POST`/`DELETE`: Auth required
+  - Product ratings: `GET /api/products/<id>/rating/` exposes the caller's summary (staff can target other users via `userId`); `GET /api/products/<id>/ratings/` is public and lists every rating with `id`, value, and optional first/last name metadata; `POST`/`DELETE` require auth and staff can override the target user via `userId`
   - `GET /api/users/<id>/`: Auth required; user must match the path or be staff/superuser
   - Cart GET endpoints: Auth required; list requires staff/superuser, detail/user views require the owner or staff/superuser
 
@@ -60,9 +60,10 @@ Attach a JWT access token for protected routes using the `Authorization: Bearer 
 - Auth required: `PATCH /api/products/<id>/`
 - Auth required: `DELETE /api/products/<id>/`
 - Ratings:
-  - Public: `GET /api/products/<id>/rating/`
-  - Auth required: `POST /api/products/<id>/rating/` (set/update user rating)
-  - Auth required: `DELETE /api/products/<id>/rating/` (remove user rating)
+  - Public: `GET /api/products/<id>/rating/` (returns the caller’s summary; staff/superusers may supply `?userId=` to inspect another user’s rating)
+  - Public: `GET /api/products/<id>/ratings/` (list every rating, exposing the rating `id`, value, and optional first/last name)
+  - Auth required: `POST /api/products/<id>/rating/` (set/update user rating; staff/superusers may supply `?userId=` to rate on behalf of another user)
+  - Auth required: `DELETE /api/products/<id>/rating/?ratingId=<rating>` (remove a specific rating; non-privileged callers may only delete their own)
 
 Body (create/update example) (omit `id`; it will be generated):
 ```json
@@ -253,7 +254,4 @@ Notes:
 
 ## Notes
 - Unified seeding command: `python manage.py seed_fakestore [--flush]` loads the full dataset (products, users, addresses, carts, cart items).
-- Repositories intentionally thin; add caching, soft delete, or query specifications as complexity grows.
 - Error codes are centralized in `apps/api/utils.py` (`error_response`). Add new codes there.
-- Future enhancements: pagination, authentication, rate limiting, category/product validation details, global exception handler for SERVER_ERROR wrapping.
-- Infrastructure & deployment automation now live in the dedicated Ops repository; consult that project for Docker, Compose, and environment provisioning guidance.

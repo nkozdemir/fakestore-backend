@@ -6,6 +6,7 @@ from apps.catalog.views import (
     CategoryDetailView,
     ProductByCategoriesView,
     ProductRatingView,
+    ProductRatingListView,
 )
 
 urlpatterns = [
@@ -19,6 +20,11 @@ urlpatterns = [
         "products/<int:product_id>/rating/",
         ProductRatingView.as_view(),
         name="api-products-rating",
+    ),
+    path(
+        "products/<int:product_id>/ratings/",
+        ProductRatingListView.as_view(),
+        name="api-products-ratings-list",
     ),
     path(
         "products/by-categories/",

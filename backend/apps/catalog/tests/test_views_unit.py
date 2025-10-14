@@ -7,6 +7,7 @@ from rest_framework.permissions import AllowAny
 from apps.catalog.views import (
     ProductListView,
     ProductDetailView,
+    ProductRatingListView,
     ProductRatingView,
     CategoryListView,
     CategoryDetailView,
@@ -404,6 +405,55 @@ class CatalogViewsUnitTests(unittest.TestCase):
         self.assertEqual(response_put.status_code, 404)
         self.assertEqual(response_put.data["error"]["code"], "NOT_FOUND")
 
+    def test_product_ratings_list_returns_data(self):
+        service_mock = Mock()
+        payload = {
+            "productId": 1,
+            "count": 1,
+            "ratings": [
+                {
+                    "id": 10,
+                    "firstName": "Admin",
+                    "lastName": "User",
+                    "value": 5,
+                    "createdAt": "2025-01-01T00:00:00Z",
+                    "updatedAt": "2025-01-01T00:00:00Z",
+                }
+            ],
+        }
+        service_mock.list_product_ratings.return_value = payload
+        with patch.object(ProductRatingListView, "service", service_mock):
+            request = self.factory.get("/api/products/1/ratings/")
+            response = self.dispatch(request, ProductRatingListView, product_id=1)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, payload)
+        service_mock.list_product_ratings.assert_called_once_with(1)
+
+    def test_product_ratings_list_handles_service_error(self):
+        service_mock = Mock()
+        service_mock.list_product_ratings.return_value = (
+            "NOT_FOUND",
+            "Product not found",
+            {"id": 1},
+        )
+        with patch.object(ProductRatingListView, "service", service_mock):
+            request = self.factory.get("/api/products/1/ratings/")
+            response = self.dispatch(request, ProductRatingListView, product_id=1)
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.data["error"]["code"], "NOT_FOUND")
+        service_mock.list_product_ratings.assert_called_once_with(1)
+
+    def test_product_ratings_list_allows_anonymous_access(self):
+        service_mock = Mock()
+        payload = {"productId": 2, "count": 0, "ratings": []}
+        service_mock.list_product_ratings.return_value = payload
+        with patch.object(ProductRatingListView, "service", service_mock):
+            request = self.factory.get("/api/products/2/ratings/")
+            response = self.dispatch(request, ProductRatingListView, product_id=2)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, payload)
+        service_mock.list_product_ratings.assert_called_once_with(2)
+
     def test_product_rating_post_requires_user_id(self):
         service_mock = Mock()
         user = types.SimpleNamespace(id=None, is_authenticated=True)
@@ -489,14 +539,106 @@ class CatalogViewsUnitTests(unittest.TestCase):
         self.assertEqual(response.data["error"]["code"], "VALIDATION_ERROR")
         service_mock.set_user_rating.assert_not_called()
 
+    def test_product_rating_post_privileged_can_override_user(self):
+        service_mock = Mock()
+        service_mock.set_user_rating.return_value = {"rating": {"rate": 5, "count": 1}}
+        admin = types.SimpleNamespace(
+            id=1, is_authenticated=True, is_staff=True, is_superuser=False
+        )
+        with patch.object(ProductRatingView, "service", service_mock):
+            request = self.factory.post(
+                "/api/products/1/rating/?userId=77", {"value": 5}, format="json"
+            )
+            self.authenticate(request, admin)
+            response = self.dispatch(request, ProductRatingView, product_id=1)
+        self.assertEqual(response.status_code, 201)
+        service_mock.set_user_rating.assert_called_once_with(1, 77, 5)
+
+    def test_product_rating_post_non_privileged_override_forbidden(self):
+        service_mock = Mock()
+        service_mock.set_user_rating.return_value = {"rating": {"rate": 2, "count": 1}}
+        user = types.SimpleNamespace(
+            id=3, is_authenticated=True, is_staff=False, is_superuser=False
+        )
+        with patch.object(ProductRatingView, "service", service_mock):
+            request = self.factory.post(
+                "/api/products/1/rating/?userId=4", {"value": 2}, format="json"
+            )
+            self.authenticate(request, user)
+            response = self.dispatch(request, ProductRatingView, product_id=1)
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.data["error"]["code"], "FORBIDDEN")
+        service_mock.set_user_rating.assert_not_called()
+
+    def test_product_rating_post_invalid_query_user_id(self):
+        service_mock = Mock()
+        admin = types.SimpleNamespace(
+            id=1, is_authenticated=True, is_staff=True, is_superuser=False
+        )
+        with patch.object(ProductRatingView, "service", service_mock):
+            request = self.factory.post(
+                "/api/products/1/rating/?userId=bad", {"value": 4}, format="json"
+            )
+            self.authenticate(request, admin)
+            response = self.dispatch(request, ProductRatingView, product_id=1)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["error"]["code"], "VALIDATION_ERROR")
+        service_mock.set_user_rating.assert_not_called()
+
+    def test_product_rating_get_privileged_can_override_user(self):
+        service_mock = Mock()
+        service_mock.get_rating_summary.return_value = {
+            "rating": {"rate": 4, "count": 1},
+            "userRating": 4,
+        }
+        admin = types.SimpleNamespace(
+            id=1, is_authenticated=True, is_staff=True, is_superuser=False
+        )
+        with patch.object(ProductRatingView, "service", service_mock):
+            request = self.factory.get("/api/products/1/rating/?userId=77")
+            self.authenticate(request, admin)
+            response = self.dispatch(request, ProductRatingView, product_id=1)
+        self.assertEqual(response.status_code, 200)
+        service_mock.get_rating_summary.assert_called_once_with(1, 77)
+
+    def test_product_rating_get_non_privileged_override_forbidden(self):
+        service_mock = Mock()
+        service_mock.get_rating_summary.return_value = {
+            "rating": {"rate": 4, "count": 1},
+            "userRating": 4,
+        }
+        user = types.SimpleNamespace(
+            id=3, is_authenticated=True, is_staff=False, is_superuser=False
+        )
+        with patch.object(ProductRatingView, "service", service_mock):
+            request = self.factory.get("/api/products/1/rating/?userId=5")
+            self.authenticate(request, user)
+            response = self.dispatch(request, ProductRatingView, product_id=1)
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.data["error"]["code"], "FORBIDDEN")
+        service_mock.get_rating_summary.assert_not_called()
+
+    def test_product_rating_get_invalid_query_user_id(self):
+        service_mock = Mock()
+        admin = types.SimpleNamespace(
+            id=1, is_authenticated=True, is_staff=True, is_superuser=False
+        )
+        with patch.object(ProductRatingView, "service", service_mock):
+            request = self.factory.get("/api/products/1/rating/?userId=bad")
+            self.authenticate(request, admin)
+            response = self.dispatch(request, ProductRatingView, product_id=1)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["error"]["code"], "VALIDATION_ERROR")
+        service_mock.get_rating_summary.assert_not_called()
+
     def test_product_rating_delete_success_and_error(self):
         service_mock = Mock()
-        service_mock.delete_user_rating.side_effect = [
+        service_mock.delete_rating.side_effect = [
             {"rating": {"rate": 0, "count": 0}},
-            ("NOT_FOUND", "missing", {"id": 1}),
+            ("NOT_FOUND", "missing", {"ratingId": 5}),
         ]
         request_success = self.factory.delete(
-            "/api/products/1/rating/", HTTP_X_USER_ID="77"
+            "/api/products/1/rating/?ratingId=5", HTTP_X_USER_ID="77"
         )
         with patch.object(ProductRatingView, "service", service_mock), patch.object(
             ProductRatingView, "permission_classes", [AllowAny]
@@ -506,9 +648,12 @@ class CatalogViewsUnitTests(unittest.TestCase):
             )
         self.assertEqual(response_success.status_code, 200)
         self.assertEqual(response_success.data["rating"]["count"], 0)
+        service_mock.delete_rating.assert_called_with(
+            1, 5, 77, False
+        )
 
         request_error = self.factory.delete(
-            "/api/products/1/rating/", HTTP_X_USER_ID="77"
+            "/api/products/1/rating/?ratingId=5", HTTP_X_USER_ID="77"
         )
         with patch.object(ProductRatingView, "service", service_mock), patch.object(
             ProductRatingView, "permission_classes", [AllowAny]
@@ -519,10 +664,34 @@ class CatalogViewsUnitTests(unittest.TestCase):
         self.assertEqual(response_error.status_code, 404)
         self.assertEqual(response_error.data["error"]["code"], "NOT_FOUND")
 
+    def test_product_rating_delete_requires_rating_id(self):
+        service_mock = Mock()
+        request = self.factory.delete("/api/products/1/rating/", HTTP_X_USER_ID="55")
+        with patch.object(ProductRatingView, "service", service_mock), patch.object(
+            ProductRatingView, "permission_classes", [AllowAny]
+        ):
+            response = self.dispatch(request, ProductRatingView, product_id=1)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["error"]["code"], "VALIDATION_ERROR")
+        service_mock.delete_rating.assert_not_called()
+
+    def test_product_rating_delete_invalid_rating_id(self):
+        service_mock = Mock()
+        request = self.factory.delete(
+            "/api/products/1/rating/?ratingId=bad", HTTP_X_USER_ID="55"
+        )
+        with patch.object(ProductRatingView, "service", service_mock), patch.object(
+            ProductRatingView, "permission_classes", [AllowAny]
+        ):
+            response = self.dispatch(request, ProductRatingView, product_id=1)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["error"]["code"], "VALIDATION_ERROR")
+        service_mock.delete_rating.assert_not_called()
+
     def test_product_rating_delete_requires_user(self):
         service_mock = Mock()
         user = types.SimpleNamespace(id=None, is_authenticated=True)
-        request = self.factory.delete("/api/products/1/rating/")
+        request = self.factory.delete("/api/products/1/rating/?ratingId=9")
         self.authenticate(request, user)
         with patch.object(ProductRatingView, "service", service_mock):
             response = self.dispatch(request, ProductRatingView, product_id=1)

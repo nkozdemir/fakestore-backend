@@ -73,4 +73,8 @@ class RatingRepository(GenericRepository[Rating]):
         return self.model.objects.filter(product_id=product_id, user_id=user_id).first()
 
     def list_for_product(self, product_id: int):
-        return self.model.objects.filter(product_id=product_id)
+        return (
+            self.model.objects.filter(product_id=product_id)
+            .select_related("user")
+            .order_by("-updated_at")
+        )

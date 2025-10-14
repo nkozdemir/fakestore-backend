@@ -36,10 +36,8 @@ class CartCreateProductSerializer(serializers.Serializer):
 
 
 class CartCreateSerializer(serializers.Serializer):
-    # POST-only serializer: snake_case items; userId remains to support admin overrides.
     date = serializers.CharField(required=False)
     products = serializers.ListField(
         child=CartCreateProductSerializer(), required=False
     )
-    userId = serializers.IntegerField(required=False)
     # 'id' is not accepted here; it will be auto-assigned by the service
