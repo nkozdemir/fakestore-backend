@@ -23,11 +23,16 @@ logger = get_logger(__name__).bind(component="catalog", layer="view")
 def _ensure_admin_privileged(log, request, action: str, resource: str):
     user = getattr(request, "user", None)
     if not user or not getattr(user, "is_authenticated", False):
-        log.warning("Unauthorized %s action attempt", resource, action=action)
+        log.warning(
+            "Unauthorized action attempt",
+            resource=resource,
+            action=action,
+        )
         return error_response("UNAUTHORIZED", "Authentication required")
     if not (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
         log.warning(
-            "Forbidden %s action", resource,
+            "Forbidden action",
+            resource=resource,
             action=action,
             user_id=getattr(user, "id", None),
         )

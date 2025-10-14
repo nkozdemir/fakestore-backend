@@ -15,8 +15,8 @@ class AddressSerializer(serializers.Serializer):
 
 
 class GeoSerializer(serializers.Serializer):
-    lat = serializers.CharField()
-    long = serializers.CharField()
+    lat = serializers.DecimalField(max_digits=10, decimal_places=6)
+    long = serializers.DecimalField(max_digits=10, decimal_places=6)
 
 
 class AddressWriteSerializer(serializers.Serializer):
