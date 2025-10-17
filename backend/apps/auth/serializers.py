@@ -15,6 +15,21 @@ class RegisterResponseSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
 
+class UsernameAvailabilityRequestSerializer(serializers.Serializer):
+    username = serializers.CharField(min_length=1)
+
+    def validate_username(self, value: str) -> str:
+        trimmed = value.strip()
+        if not trimmed:
+            raise serializers.ValidationError("Username cannot be blank.")
+        return trimmed
+
+
+class UsernameAvailabilityResponseSerializer(serializers.Serializer):
+    username = serializers.CharField()
+    available = serializers.BooleanField()
+
+
 class MeResponseSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     username = serializers.CharField()

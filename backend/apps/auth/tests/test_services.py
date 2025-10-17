@@ -62,6 +62,12 @@ class RegistrationServiceTests(unittest.TestCase):
         )
         self.assertEqual(result[0], "VALIDATION_ERROR")
 
+    def test_is_username_available_checks_repository(self):
+        self.repo._existing_usernames.add("taken")
+        self.assertFalse(self.service.is_username_available("taken"))
+        self.assertFalse(self.service.is_username_available(" taken "))
+        self.assertTrue(self.service.is_username_available("free"))
+
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

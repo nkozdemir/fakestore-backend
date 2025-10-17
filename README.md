@@ -38,8 +38,9 @@ Base path: `/api/`
 Authentication & Permissions
 - JWT is required for write operations on most resources. Some read endpoints now require ownership or staff access.
 - Auth endpoints:
-  - Public: `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/refresh`
+  - Public: `GET /api/auth/validate-username?username=<value>`, `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/refresh`
   - Auth required: `GET /api/auth/me`, `POST /api/auth/logout`, `POST /api/auth/logout-all`
+- Username availability is determined via `GET /api/auth/validate-username/?username=<value>` and returns `{ "username": "...", "available": true/false }`.
 - Products & Categories: Public GETs; POST/PUT/PATCH/DELETE require auth
 - Users: Auth required for all endpoints; only staff/superusers may create users or list all users.
 - Carts: Auth required for all endpoints; cart reads are limited to the owner unless staff/superuser.

@@ -109,6 +109,32 @@ paths:
               schema:
                 $ref: '#/components/schemas/TokenRefresh'
           description: ''
+  /api/auth/validate-username/:
+    get:
+      operationId: auth_validate_username_retrieve
+      summary: Check username availability
+      tags:
+      - Auth
+      parameters:
+      - in: query
+        name: username
+        schema:
+          type: string
+        required: true
+        description: Username to check for uniqueness
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsernameAvailabilityResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
   /api/auth/register/:
     post:
       operationId: auth_register_create
@@ -2167,6 +2193,16 @@ components:
       required:
       - email
       - id
+      - username
+    UsernameAvailabilityResponse:
+      type: object
+      properties:
+        username:
+          type: string
+        available:
+          type: boolean
+      required:
+      - available
       - username
     TokenObtainPair:
       type: object

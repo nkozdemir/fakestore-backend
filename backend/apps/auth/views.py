@@ -11,11 +11,13 @@ from rest_framework_simplejwt.tokens import (
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from apps.api.utils import error_response
 from apps.common import get_logger
-from drf_spectacular.utils import extend_schema, OpenApiResponse
+from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter
 from apps.api.schemas import ErrorResponseSerializer
 from .serializers import (
     RegisterRequestSerializer,
     RegisterResponseSerializer,
+    UsernameAvailabilityRequestSerializer,
+    UsernameAvailabilityResponseSerializer,
     MeResponseSerializer,
     LogoutRequestSerializer,
     DetailResponseSerializer,
@@ -24,6 +26,45 @@ from .container import build_registration_service
 
 User = get_user_model()
 logger = get_logger(__name__).bind(component="auth", layer="view")
+
+
+@extend_schema(tags=["Auth"])
+class UsernameAvailabilityView(APIView):
+    permission_classes = [AllowAny]
+    service = build_registration_service()
+    log = logger.bind(view="UsernameAvailabilityView")
+
+    @extend_schema(
+        summary="Check username availability",
+        parameters=[
+            OpenApiParameter(
+                name="username",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                required=True,
+                description="Username to check for uniqueness",
+            )
+        ],
+        responses={
+            200: UsernameAvailabilityResponseSerializer,
+            400: OpenApiResponse(response=ErrorResponseSerializer),
+        },
+    )
+    def get(self, request):
+        serializer = UsernameAvailabilityRequestSerializer(
+            data=request.query_params
+        )
+        serializer.is_valid(raise_exception=True)
+        username = serializer.validated_data["username"]
+        available = self.service.is_username_available(username)
+        self.log.debug(
+            "Username availability checked", username=username, available=available
+        )
+        payload = {"username": username, "available": available}
+        return Response(
+            UsernameAvailabilityResponseSerializer(payload).data,
+            status=status.HTTP_200_OK,
+        )
 
 
 @extend_schema(tags=["Auth"])

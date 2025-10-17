@@ -3,12 +3,21 @@ import unittest
 from unittest.mock import Mock, patch
 from rest_framework import status
 from rest_framework.exceptions import ValidationError as DRFValidationError
-from apps.auth.views import RegisterView, MeView, LogoutView, LogoutAllView
+from apps.auth.views import (
+    RegisterView,
+    UsernameAvailabilityView,
+    MeView,
+    LogoutView,
+    LogoutAllView,
+)
 
 
 class DummyRequest:
-    def __init__(self, data=None, user=None):
+    def __init__(self, data=None, query_params=None, user=None):
         self.data = data or {}
+        self.query_params = (
+            query_params if query_params is not None else dict(self.data)
+        )
         self.user = user
 
 
@@ -139,6 +148,30 @@ class AuthViewsUnitTests(unittest.TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["username"], "me")
         self.assertTrue(response.data["is_staff"])
+
+    def test_username_availability_view_reports_status(self):
+        service = Mock()
+        service.is_username_available.return_value = True
+        request = DummyRequest(query_params={"username": "fresh"})
+        view = UsernameAvailabilityView()
+        view.service = service
+        response = view.get(request)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["username"], "fresh")
+        self.assertTrue(response.data["available"])
+        service.is_username_available.assert_called_once_with("fresh")
+
+    def test_username_availability_view_handles_taken_usernames(self):
+        service = Mock()
+        service.is_username_available.return_value = False
+        request = DummyRequest(query_params={"username": "taken"})
+        view = UsernameAvailabilityView()
+        view.service = service
+        response = view.get(request)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data["available"])
+        self.assertEqual(response.data["username"], "taken")
+        service.is_username_available.assert_called_once_with("taken")
 
     def test_logout_view_success_and_failure(self):
         blacklisted_tokens = []

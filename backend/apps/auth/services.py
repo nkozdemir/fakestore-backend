@@ -60,3 +60,10 @@ class RegistrationService:
             "username": user.username,
             "email": user.email,
         }
+
+    def is_username_available(self, username: str) -> bool:
+        normalized = username.strip()
+        self.logger.debug(
+            "Checking username availability", username=normalized or username
+        )
+        return not self.users.username_exists(normalized)
