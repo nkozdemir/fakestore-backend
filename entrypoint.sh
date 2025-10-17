@@ -77,5 +77,52 @@ if [ -n "$migrations_sentinel" ]; then
   touch "$migrations_sentinel"
 fi
 
+generate_schema="${GENERATE_OPENAPI_ON_START:-1}"
+schema_dir="${APP_DIR}/static/schema"
+schema_json="${schema_dir}/openapi.json"
+schema_yaml="${schema_dir}/openapi.yaml"
+
+if [ "$generate_schema" != "0" ]; then
+  need_schema=0
+  if [ ! -f "$schema_json" ] || [ ! -s "$schema_json" ]; then
+    need_schema=1
+  elif [ ! -f "$schema_yaml" ] || [ ! -s "$schema_yaml" ]; then
+    need_schema=1
+  fi
+
+  if [ "$need_schema" -eq 1 ]; then
+    echo "Exporting OpenAPI schema artifacts to ${schema_dir}..."
+    mkdir -p "$schema_dir"
+    tmp_json="$(mktemp /tmp/openapi.XXXXXX.json)"
+    cleanup_tmp() {
+      rm -f "$tmp_json"
+    }
+    trap cleanup_tmp EXIT
+    if ${MANAGE_CMD} spectacular --file "$tmp_json" --format openapi-json; then
+      python - "$tmp_json" "$schema_json" "$schema_yaml" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+tmp_json, dest_json, dest_yaml = sys.argv[1:4]
+data = json.load(open(tmp_json))
+Path(dest_json).write_text(json.dumps(data, indent=2))
+print(f"Wrote JSON schema to {dest_json}")
+try:
+    import yaml  # type: ignore
+except ModuleNotFoundError:
+    print("PyYAML not installed; skipping YAML schema export.")
+else:
+    Path(dest_yaml).write_text(yaml.safe_dump(data, sort_keys=False))
+    print(f"Wrote YAML schema to {dest_yaml}")
+PY
+    else
+      echo "WARNING: Failed to generate OpenAPI schema; continuing start-up." >&2
+    fi
+    trap - EXIT
+    cleanup_tmp
+  fi
+fi
+
 echo "Launching application: $*"
 exec "$@"
