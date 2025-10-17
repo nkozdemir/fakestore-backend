@@ -188,3 +188,5 @@ LOGGING = {
         "level": LOG_LEVEL,
     },
 }
+
+CORS_ALLOW_ALL_ORIGINS = True
