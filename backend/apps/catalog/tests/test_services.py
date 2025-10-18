@@ -122,13 +122,6 @@ class FakeProductRepository:
             if any(c.name == category_name for c in p.categories.all())
         ]
 
-    def list_by_category_ids(self, category_ids):
-        return [
-            p
-            for p in self._products.values()
-            if any(c.id in category_ids for c in p.categories.all())
-        ]
-
     def set_categories(self, product: StubProduct, category_ids):
         categories = [
             self.category_repo.get(id=cid)

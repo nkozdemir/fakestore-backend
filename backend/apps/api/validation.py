@@ -108,24 +108,6 @@ def _resolve_rating_user(
     return None
 
 
-def _resolve_category_ids(request: HttpRequest) -> Any:
-    raw = request.GET.get("categoryIds")
-    if raw is None:
-        request.category_ids = []
-        logger.debug("No categoryIds provided")
-        return None
-    try:
-        ids = [int(item) for item in raw.split(",") if item.strip()]
-    except ValueError:
-        logger.warning("Invalid categoryIds parameter", value=raw)
-        return error_response(
-            "VALIDATION_ERROR", "Invalid categoryIds parameter", {"categoryIds": raw}
-        )
-    request.category_ids = ids
-    logger.debug("Resolved categoryIds parameter", category_ids=ids)
-    return None
-
-
 def _validate_user_uniqueness(
     request: HttpRequest, user_id: Optional[int] = None
 ) -> Any:
@@ -205,24 +187,18 @@ def validate_request_context(request: HttpRequest, view_class, view_kwargs) -> A
                 method=request.method,
             )
     elif view_name == "ProductRatingView":
-        if request.method in ("POST", "DELETE"):
-            resp = _resolve_rating_user(request, require=True)
-            if resp:
-                logger.warning(
-                    "Product rating validation rejected request", method=request.method
-                )
-                return resp
-        else:
-            resp = _resolve_rating_user(request, require=False)
-            if resp:
-                logger.warning(
-                    "Product rating validation rejected request", method=request.method
-                )
-                return resp
-    elif view_name == "ProductByCategoriesView":
-        resp = _resolve_category_ids(request)
+        if not _is_authenticated_user(request):
+            logger.warning(
+                "ProductRatingView requires authentication", method=request.method
+            )
+            return error_response("UNAUTHORIZED", "Authentication required")
+        resp = _resolve_rating_user(
+            request, require=request.method in ("POST", "DELETE")
+        )
         if resp:
-            logger.warning("ProductByCategoriesView validation failed")
+            logger.warning(
+                "Product rating validation rejected request", method=request.method
+            )
             return resp
     elif view_name == "UserListView":
         if request.method in ("GET",):

@@ -2,7 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly
+from rest_framework.permissions import AllowAny, IsAuthenticated, IsAuthenticatedOrReadOnly
 from .container import build_product_service, build_category_service
 from .serializers import (
     ProductReadSerializer,
@@ -332,7 +332,7 @@ class CategoryDetailView(APIView):
 
 @extend_schema(tags=["Catalog", "Ratings"])
 class ProductRatingListView(APIView):
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [AllowAny]
     service = build_product_service()
     log = logger.bind(view="ProductRatingListView")
 
@@ -374,7 +374,7 @@ class ProductRatingListView(APIView):
 
 @extend_schema(tags=["Catalog", "Ratings"])
 class ProductRatingView(APIView):
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAuthenticated]
     service = build_product_service()
     log = logger.bind(view="ProductRatingView")
 
@@ -642,34 +642,3 @@ class ProductRatingView(APIView):
             )
             return error_response(code, msg, details)
         return Response(result, status=status.HTTP_200_OK)
-
-
-@extend_schema(tags=["Catalog"])
-class ProductByCategoriesView(APIView):
-    permission_classes = [AllowAny]
-    service = build_product_service()
-    log = logger.bind(view="ProductByCategoriesView")
-
-    @extend_schema(
-        summary="List products by categories",
-        parameters=[
-            OpenApiParameter(
-                name="categoryIds",
-                description="Comma-separated category IDs (camelCase)",
-                required=True,
-                type=str,
-            )
-        ],
-        responses={
-            200: ProductReadSerializer(many=True),
-            400: OpenApiResponse(response=ErrorResponseSerializer),
-        },
-    )
-    def get(self, request):
-        ids = getattr(request, "category_ids", [])
-        self.log.debug("Listing products by category ids", category_ids=ids)
-        if not ids:
-            self.log.info("No category ids provided; returning empty set")
-            return Response([])
-        data = self.service.list_products_by_category_ids(ids)
-        return Response(ProductReadSerializer(data, many=True).data)

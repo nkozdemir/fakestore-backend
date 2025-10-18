@@ -6,7 +6,7 @@ from rest_framework import status
 from .container import build_user_service
 from .serializers import UserSerializer, AddressWriteSerializer, AddressSerializer
 from apps.api.utils import error_response
-from rest_framework.permissions import AllowAny, IsAuthenticated, IsAuthenticatedOrReadOnly
+from rest_framework.permissions import IsAuthenticated
 from django.db import IntegrityError
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from .models import User
@@ -55,7 +55,7 @@ def _authorize_address_access(
 
 @extend_schema(tags=["Users"])
 class UserListView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
     service = build_user_service()
     log = logger.bind(view="UserListView")
 
@@ -142,7 +142,7 @@ class UserListView(APIView):
 
 @extend_schema(tags=["Users"])
 class UserDetailView(APIView):
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAuthenticated]
     service = build_user_service()
     log = logger.bind(view="UserDetailView")
 

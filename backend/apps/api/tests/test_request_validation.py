@@ -9,7 +9,6 @@ from apps.api.validation import (
 )
 from apps.api.utils import error_response
 from apps.catalog.views import (
-    ProductByCategoriesView,
     ProductRatingView,
     ProductListView,
     ProductDetailView,
@@ -28,15 +27,6 @@ from apps.users.views import (
 factory = APIRequestFactory()
 
 
-def test_middleware_returns_error_for_invalid_category_ids():
-    request = factory.get("/api/products/by-categories/", {"categoryIds": "bad"})
-    middleware = RequestValidationMiddleware(lambda req: None)
-    view_func = ProductByCategoriesView.as_view()
-    response = middleware.process_view(request, view_func, [], {})
-    assert response.status_code == 400
-    assert response.data["error"]["code"] == "VALIDATION_ERROR"
-
-
 def test_validate_request_sets_cart_user_id():
     request = factory.post("/api/carts/", {}, format="json")
     request.user = types.SimpleNamespace(id=42, is_authenticated=True)
@@ -47,18 +37,20 @@ def test_validate_request_sets_cart_user_id():
 
 def test_validate_request_rating_get_ignores_invalid_header():
     request = factory.get("/api/products/1/rating/", HTTP_X_USER_ID="invalid")
+    request.user = types.SimpleNamespace(id=11, is_authenticated=True)
     response = validate_request_context(request, ProductRatingView, {"product_id": 1})
     assert response is None
-    assert getattr(request, "rating_user_id", "missing") is None
+    assert getattr(request, "rating_user_id", None) == 11
 
 
-def test_validate_request_rating_post_invalid_header_errors():
+def test_validate_request_rating_post_invalid_header_is_ignored_for_authenticated_user():
     request = factory.post(
         "/api/products/1/rating/", {"value": 4}, format="json", HTTP_X_USER_ID="invalid"
     )
+    request.user = types.SimpleNamespace(id=15, is_authenticated=True)
     response = validate_request_context(request, ProductRatingView, {"product_id": 1})
-    assert response.status_code == 400
-    assert response.data["error"]["code"] == "VALIDATION_ERROR"
+    assert response is None
+    assert getattr(request, "rating_user_id") == 15
 
 
 def test_middleware_no_view_class_returns_none():
@@ -70,6 +62,7 @@ def test_middleware_no_view_class_returns_none():
 
 def test_validate_request_rating_get_propagates_errors_from_helper():
     request = factory.get("/api/products/1/rating/")
+    request.user = types.SimpleNamespace(id=23, is_authenticated=True)
     with patch(
         "apps.api.validation._resolve_rating_user",
         return_value=error_response("VALIDATION_ERROR", "bad", None),

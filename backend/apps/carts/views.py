@@ -12,7 +12,7 @@ from .serializers import (
 )
 from apps.api.utils import error_response
 from rest_framework import serializers
-from rest_framework.permissions import IsAuthenticatedOrReadOnly
+from rest_framework.permissions import IsAuthenticated
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse
 from apps.api.schemas import ErrorResponseSerializer
 from apps.common import get_logger
@@ -30,7 +30,7 @@ class CartPatchSerializer(serializers.Serializer):
 
 @extend_schema(tags=["Carts"])
 class CartListView(APIView):
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAuthenticated]
     service = build_cart_service()
     log = logger.bind(view="CartListView")
 
@@ -169,7 +169,7 @@ class CartListView(APIView):
 
 @extend_schema(tags=["Carts"])
 class CartDetailView(APIView):
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAuthenticated]
     service = build_cart_service()
     log = logger.bind(view="CartDetailView")
 
@@ -362,7 +362,7 @@ class CartDetailView(APIView):
 
 @extend_schema(tags=["Carts"])
 class CartByUserView(APIView):
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAuthenticated]
     service = build_cart_service()
     log = logger.bind(view="CartByUserView")
 

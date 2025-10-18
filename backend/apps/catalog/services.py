@@ -90,11 +90,6 @@ class ProductService:
             else self.products.list()
         )
 
-    def list_products_by_category_ids(self, category_ids):
-        self.logger.debug("Listing products by categories", category_ids=category_ids)
-        qs = self.products.list_by_category_ids(category_ids)
-        return ProductMapper.many_to_dto(qs)
-
     def get_product(self, product_id: int):
         self.logger.debug("Fetching product", product_id=product_id)
         p = self.products.get(id=product_id)

@@ -108,7 +108,7 @@ class LoginView(TokenObtainPairView):
 
 @extend_schema(tags=["Auth"], summary="Refresh JWT")
 class RefreshView(TokenRefreshView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
 
 @extend_schema(

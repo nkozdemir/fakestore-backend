@@ -13,6 +13,9 @@ paths:
       summary: Login (JWT obtain pair)
       tags:
       - Auth
+      x-roles-allowed:
+      - public
+      - user
       requestBody:
         content:
           application/json:
@@ -21,6 +24,7 @@ paths:
         required: true
       security:
       - {}
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -34,6 +38,10 @@ paths:
       summary: Logout (blacklist refresh)
       tags:
       - Auth
+      x-roles-allowed:
+      - user
+      security:
+      - jwtAuth: []
       requestBody:
         content:
           application/json:
@@ -59,6 +67,10 @@ paths:
       summary: Logout from all devices
       tags:
       - Auth
+      x-roles-allowed:
+      - user
+      security:
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -78,6 +90,12 @@ paths:
       summary: Get current user
       tags:
       - Auth
+      x-roles-allowed:
+      - user
+      - staff
+      - admin
+      security:
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -94,6 +112,8 @@ paths:
       summary: Refresh JWT
       tags:
       - Auth
+      x-roles-allowed:
+      - user
       requestBody:
         content:
           application/json:
@@ -101,7 +121,7 @@ paths:
               $ref: '#/components/schemas/TokenRefreshRequest'
         required: true
       security:
-      - {}
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -115,6 +135,10 @@ paths:
       summary: Check username availability
       tags:
       - Auth
+      x-roles-allowed:
+      - public
+      security:
+      - {}
       parameters:
       - in: query
         name: username
@@ -141,6 +165,8 @@ paths:
       summary: Register user
       tags:
       - Auth
+      x-roles-allowed:
+      - public
       requestBody:
         content:
           application/json:
@@ -148,7 +174,7 @@ paths:
               $ref: '#/components/schemas/RegisterRequestRequest'
         required: true
       security:
-      - jwtAuth: []
+      - {}
       responses:
         '201':
           content:
@@ -175,6 +201,9 @@ paths:
         description: Filter by user ID (preferred)
       tags:
       - Carts
+      x-roles-allowed:
+      - staff
+      - admin
       security:
       - jwtAuth: []
       responses:
@@ -194,6 +223,10 @@ paths:
       summary: Create cart
       tags:
       - Carts
+      x-roles-allowed:
+      - user
+      - staff
+      - admin
       requestBody:
         content:
           application/json:
@@ -233,6 +266,10 @@ paths:
         required: true
       tags:
       - Carts
+      x-roles-allowed:
+      - user
+      - staff
+      - admin
       security:
       - jwtAuth: []
       responses:
@@ -263,6 +300,10 @@ paths:
         required: true
       tags:
       - Carts
+      x-roles-allowed:
+      - user
+      - staff
+      - admin
       requestBody:
         content:
           application/json:
@@ -304,6 +345,10 @@ paths:
         required: true
       tags:
       - Carts
+      x-roles-allowed:
+      - user
+      - staff
+      - admin
       requestBody:
         content:
           application/json:
@@ -345,6 +390,10 @@ paths:
         required: true
       tags:
       - Carts
+      x-roles-allowed:
+      - user
+      - staff
+      - admin
       security:
       - jwtAuth: []
       responses:
@@ -381,6 +430,10 @@ paths:
         required: true
       tags:
       - Carts
+      x-roles-allowed:
+      - user
+      - staff
+      - admin
       security:
       - jwtAuth: []
       responses:
@@ -410,6 +463,9 @@ paths:
       summary: List categories
       tags:
       - Catalog
+      x-roles-allowed:
+      - public
+      - user
       security:
       - jwtAuth: []
       - {}
@@ -428,6 +484,9 @@ paths:
       description: Requires staff or superuser privileges.
       tags:
       - Catalog
+      x-roles-allowed:
+      - staff
+      - admin
       requestBody:
         content:
           application/json:
@@ -473,6 +532,9 @@ paths:
         required: true
       tags:
       - Catalog
+      x-roles-allowed:
+      - public
+      - user
       security:
       - jwtAuth: []
       - {}
@@ -501,6 +563,9 @@ paths:
         required: true
       tags:
       - Catalog
+      x-roles-allowed:
+      - staff
+      - admin
       requestBody:
         content:
           application/json:
@@ -552,6 +617,9 @@ paths:
         required: true
       tags:
       - Catalog
+      x-roles-allowed:
+      - staff
+      - admin
       requestBody:
         content:
           application/json:
@@ -602,6 +670,9 @@ paths:
         required: true
       tags:
       - Catalog
+      x-roles-allowed:
+      - staff
+      - admin
       security:
       - jwtAuth: []
       responses:
@@ -639,7 +710,11 @@ paths:
         description: Filter by category name
       tags:
       - Catalog
+      x-roles-allowed:
+      - public
+      - user
       security:
+      - {}
       - jwtAuth: []
       responses:
         '200':
@@ -654,6 +729,9 @@ paths:
       description: Requires staff or superuser privileges.
       tags:
       - Catalog
+      x-roles-allowed:
+      - staff
+      - admin
       requestBody:
         content:
           application/json:
@@ -699,7 +777,11 @@ paths:
         required: true
       tags:
       - Catalog
+      x-roles-allowed:
+      - public
+      - user
       security:
+      - {}
       - jwtAuth: []
       responses:
         '200':
@@ -725,6 +807,9 @@ paths:
         required: true
       tags:
       - Catalog
+      x-roles-allowed:
+      - staff
+      - admin
       requestBody:
         content:
           application/json:
@@ -776,6 +861,9 @@ paths:
         required: true
       tags:
       - Catalog
+      x-roles-allowed:
+      - staff
+      - admin
       requestBody:
         content:
           application/json:
@@ -820,6 +908,9 @@ paths:
         required: true
       tags:
       - Catalog
+      x-roles-allowed:
+      - staff
+      - admin
       security:
       - jwtAuth: []
       responses:
@@ -861,6 +952,12 @@ paths:
       tags:
       - Catalog
       - Ratings
+      x-roles-allowed:
+      - user
+      - staff
+      - admin
+      security:
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -891,6 +988,12 @@ paths:
       tags:
       - Catalog
       - Ratings
+      x-roles-allowed:
+      - user
+      - staff
+      - admin
+      security:
+      - jwtAuth: []
       responses:
         '201':
           content:
@@ -940,6 +1043,12 @@ paths:
       tags:
       - Catalog
       - Ratings
+      x-roles-allowed:
+      - user
+      - staff
+      - admin
+      security:
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -979,6 +1088,12 @@ paths:
       tags:
       - Catalog
       - Ratings
+      x-roles-allowed:
+      - public
+      - user
+      security:
+      - {}
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -992,36 +1107,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
-  /api/products/by-categories/:
-    get:
-      operationId: products_by_categories_list
-      summary: List products by categories
-      parameters:
-      - in: query
-        name: categoryIds
-        schema:
-          type: string
-        description: Comma-separated category IDs (camelCase)
-        required: true
-      tags:
-      - Catalog
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ProductRead'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: ''
   /api/users/:
     get:
       operationId: users_list
@@ -1029,6 +1114,9 @@ paths:
       description: Requires staff or superuser privileges.
       tags:
       - Users
+      x-roles-allowed:
+      - staff
+      - admin
       security:
       - jwtAuth: []
       responses:
@@ -1046,6 +1134,9 @@ paths:
       description: Requires authentication and staff or superuser privileges.
       tags:
       - Users
+      x-roles-allowed:
+      - staff
+      - admin
       requestBody:
         content:
           application/json:
@@ -1092,6 +1183,10 @@ paths:
         required: true
       tags:
       - Users
+      x-roles-allowed:
+      - user
+      - staff
+      - admin
       security:
       - jwtAuth: []
       responses:
@@ -1130,6 +1225,10 @@ paths:
         required: true
       tags:
       - Users
+      x-roles-allowed:
+      - user
+      - staff
+      - admin
       requestBody:
         content:
           application/json:
@@ -1180,6 +1279,10 @@ paths:
         required: true
       tags:
       - Users
+      x-roles-allowed:
+      - user
+      - staff
+      - admin
       requestBody:
         content:
           application/json:
@@ -1229,6 +1332,10 @@ paths:
         required: true
       tags:
       - Users
+      x-roles-allowed:
+      - user
+      - staff
+      - admin
       security:
       - jwtAuth: []
       responses:
@@ -1266,6 +1373,9 @@ paths:
       tags:
       - Users
       - Addresses
+      x-roles-allowed:
+      - user
+      - admin
       security:
       - jwtAuth: []
       responses:
@@ -1308,6 +1418,9 @@ paths:
       tags:
       - Users
       - Addresses
+      x-roles-allowed:
+      - user
+      - admin
       requestBody:
         content:
           application/json:
@@ -1361,6 +1474,9 @@ paths:
       tags:
       - Users
       - Addresses
+      x-roles-allowed:
+      - user
+      - admin
       security:
       - jwtAuth: []
       responses:
@@ -1401,6 +1517,9 @@ paths:
       tags:
       - Users
       - Addresses
+      x-roles-allowed:
+      - user
+      - admin
       requestBody:
         content:
           application/json:
@@ -1453,6 +1572,9 @@ paths:
       tags:
       - Users
       - Addresses
+      x-roles-allowed:
+      - user
+      - admin
       requestBody:
         content:
           application/json:
@@ -1504,6 +1626,9 @@ paths:
       tags:
       - Users
       - Addresses
+      x-roles-allowed:
+      - user
+      - admin
       security:
       - jwtAuth: []
       responses:
@@ -1533,6 +1658,10 @@ paths:
       summary: Liveness probe
       tags:
       - Health
+      x-roles-allowed:
+      - public
+      security:
+      - {}
       responses:
         '200':
           content:
@@ -1546,6 +1675,10 @@ paths:
       summary: Readiness probe
       tags:
       - Health
+      x-roles-allowed:
+      - public
+      security:
+      - {}
       responses:
         '200':
           content:
@@ -1571,6 +1704,9 @@ paths:
       tags:
       - Users
       - Addresses
+      x-roles-allowed:
+      - user
+      - admin
       requestBody:
         content:
           application/json:
@@ -1616,6 +1752,9 @@ paths:
       tags:
       - Users
       - Addresses
+      x-roles-allowed:
+      - user
+      - admin
       requestBody:
         content:
           application/json:
@@ -1660,6 +1799,9 @@ paths:
       tags:
       - Users
       - Addresses
+      x-roles-allowed:
+      - user
+      - admin
       security:
       - jwtAuth: []
       responses:

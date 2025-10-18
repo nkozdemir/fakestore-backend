@@ -3,7 +3,6 @@ import unittest
 from decimal import Decimal
 from unittest.mock import Mock, patch
 from rest_framework.test import APIRequestFactory, force_authenticate
-from rest_framework.permissions import AllowAny
 from apps.catalog.views import (
     ProductListView,
     ProductDetailView,
@@ -11,7 +10,6 @@ from apps.catalog.views import (
     ProductRatingView,
     CategoryListView,
     CategoryDetailView,
-    ProductByCategoriesView,
 )
 from apps.catalog.dtos import ProductDTO, CategoryDTO
 from apps.api.validation import validate_request_context
@@ -454,17 +452,15 @@ class CatalogViewsUnitTests(unittest.TestCase):
         self.assertEqual(response.data, payload)
         service_mock.list_product_ratings.assert_called_once_with(2)
 
-    def test_product_rating_post_requires_user_id(self):
+    def test_product_rating_post_requires_authentication(self):
         service_mock = Mock()
-        user = types.SimpleNamespace(id=None, is_authenticated=True)
         with patch.object(ProductRatingView, "service", service_mock):
             request = self.factory.post(
                 "/api/products/1/rating/", {"value": 3}, format="json"
             )
-            self.authenticate(request, user)
             response = self.dispatch(request, ProductRatingView, product_id=1)
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.data["error"]["code"], "VALIDATION_ERROR")
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.data["error"]["code"], "UNAUTHORIZED")
         service_mock.set_user_rating.assert_not_called()
 
     def test_product_rating_post_handles_service_error(self):
@@ -496,48 +492,22 @@ class CatalogViewsUnitTests(unittest.TestCase):
     def test_product_rating_get_not_found(self):
         service_mock = Mock()
         service_mock.get_rating_summary.return_value = None
+        user = types.SimpleNamespace(id=7, is_authenticated=True, is_staff=False, is_superuser=False)
         request = self.factory.get("/api/products/1/rating/")
+        self.authenticate(request, user)
         with patch.object(ProductRatingView, "service", service_mock):
             response = self.dispatch(request, ProductRatingView, product_id=1)
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.data["error"]["code"], "NOT_FOUND")
 
-    def test_product_rating_get_header_fallback(self):
+    def test_product_rating_get_requires_authentication(self):
         service_mock = Mock()
-        service_mock.get_rating_summary.return_value = {
-            "rating": {"rate": 5, "count": 1}
-        }
-        request = self.factory.get("/api/products/1/rating/", HTTP_X_USER_ID="42")
+        request = self.factory.get("/api/products/1/rating/")
         with patch.object(ProductRatingView, "service", service_mock):
             response = self.dispatch(request, ProductRatingView, product_id=1)
-        self.assertEqual(response.status_code, 200)
-        service_mock.get_rating_summary.assert_called_once_with(1, 42)
-
-    def test_product_rating_post_header_and_query_fallback(self):
-        service_mock = Mock()
-        service_mock.set_user_rating.return_value = {"rating": {"rate": 4, "count": 1}}
-        request = self.factory.post(
-            "/api/products/1/rating/?userId=55", {"value": 4}, format="json"
-        )
-        with patch.object(ProductRatingView, "service", service_mock), patch.object(
-            ProductRatingView, "permission_classes", [AllowAny]
-        ):
-            response = self.dispatch(request, ProductRatingView, product_id=1)
-        self.assertEqual(response.status_code, 201)
-        service_mock.set_user_rating.assert_called_once_with(1, 55, 4)
-
-    def test_product_rating_post_invalid_header_value(self):
-        service_mock = Mock()
-        request = self.factory.post(
-            "/api/products/1/rating/", {"value": 4}, format="json", HTTP_X_USER_ID="bad"
-        )
-        with patch.object(ProductRatingView, "service", service_mock), patch.object(
-            ProductRatingView, "permission_classes", [AllowAny]
-        ):
-            response = self.dispatch(request, ProductRatingView, product_id=1)
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.data["error"]["code"], "VALIDATION_ERROR")
-        service_mock.set_user_rating.assert_not_called()
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.data["error"]["code"], "UNAUTHORIZED")
+        service_mock.get_rating_summary.assert_not_called()
 
     def test_product_rating_post_privileged_can_override_user(self):
         service_mock = Mock()
@@ -637,12 +607,12 @@ class CatalogViewsUnitTests(unittest.TestCase):
             {"rating": {"rate": 0, "count": 0}},
             ("NOT_FOUND", "missing", {"ratingId": 5}),
         ]
-        request_success = self.factory.delete(
-            "/api/products/1/rating/?ratingId=5", HTTP_X_USER_ID="77"
+        user = types.SimpleNamespace(
+            id=77, is_authenticated=True, is_staff=False, is_superuser=False
         )
-        with patch.object(ProductRatingView, "service", service_mock), patch.object(
-            ProductRatingView, "permission_classes", [AllowAny]
-        ):
+        request_success = self.factory.delete("/api/products/1/rating/?ratingId=5")
+        self.authenticate(request_success, user)
+        with patch.object(ProductRatingView, "service", service_mock):
             response_success = self.dispatch(
                 request_success, ProductRatingView, product_id=1
             )
@@ -652,12 +622,9 @@ class CatalogViewsUnitTests(unittest.TestCase):
             1, 5, 77, False
         )
 
-        request_error = self.factory.delete(
-            "/api/products/1/rating/?ratingId=5", HTTP_X_USER_ID="77"
-        )
-        with patch.object(ProductRatingView, "service", service_mock), patch.object(
-            ProductRatingView, "permission_classes", [AllowAny]
-        ):
+        request_error = self.factory.delete("/api/products/1/rating/?ratingId=5")
+        self.authenticate(request_error, user)
+        with patch.object(ProductRatingView, "service", service_mock):
             response_error = self.dispatch(
                 request_error, ProductRatingView, product_id=1
             )
@@ -666,10 +633,12 @@ class CatalogViewsUnitTests(unittest.TestCase):
 
     def test_product_rating_delete_requires_rating_id(self):
         service_mock = Mock()
-        request = self.factory.delete("/api/products/1/rating/", HTTP_X_USER_ID="55")
-        with patch.object(ProductRatingView, "service", service_mock), patch.object(
-            ProductRatingView, "permission_classes", [AllowAny]
-        ):
+        user = types.SimpleNamespace(
+            id=55, is_authenticated=True, is_staff=False, is_superuser=False
+        )
+        request = self.factory.delete("/api/products/1/rating/")
+        self.authenticate(request, user)
+        with patch.object(ProductRatingView, "service", service_mock):
             response = self.dispatch(request, ProductRatingView, product_id=1)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.data["error"]["code"], "VALIDATION_ERROR")
@@ -677,12 +646,12 @@ class CatalogViewsUnitTests(unittest.TestCase):
 
     def test_product_rating_delete_invalid_rating_id(self):
         service_mock = Mock()
-        request = self.factory.delete(
-            "/api/products/1/rating/?ratingId=bad", HTTP_X_USER_ID="55"
+        user = types.SimpleNamespace(
+            id=55, is_authenticated=True, is_staff=False, is_superuser=False
         )
-        with patch.object(ProductRatingView, "service", service_mock), patch.object(
-            ProductRatingView, "permission_classes", [AllowAny]
-        ):
+        request = self.factory.delete("/api/products/1/rating/?ratingId=bad")
+        self.authenticate(request, user)
+        with patch.object(ProductRatingView, "service", service_mock):
             response = self.dispatch(request, ProductRatingView, product_id=1)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.data["error"]["code"], "VALIDATION_ERROR")
@@ -695,40 +664,5 @@ class CatalogViewsUnitTests(unittest.TestCase):
         self.authenticate(request, user)
         with patch.object(ProductRatingView, "service", service_mock):
             response = self.dispatch(request, ProductRatingView, product_id=1)
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.data["error"]["code"], "VALIDATION_ERROR")
-
-    def test_product_by_categories_view(self):
-        products = [make_product_dto(1)]
-        service_mock = Mock()
-        service_mock.list_products_by_category_ids.return_value = products
-
-        with patch.object(ProductByCategoriesView, "service", service_mock):
-            request_missing = self.factory.get("/api/products/by-categories/")
-            response_missing = self.dispatch(request_missing, ProductByCategoriesView)
-        self.assertEqual(response_missing.status_code, 200)
-        self.assertEqual(response_missing.data, [])
-
-        with patch.object(ProductByCategoriesView, "service", service_mock):
-            request_invalid = self.factory.get(
-                "/api/products/by-categories/", {"categoryIds": "a,b"}
-            )
-            response_invalid = self.dispatch(request_invalid, ProductByCategoriesView)
-        self.assertEqual(response_invalid.status_code, 400)
-        self.assertEqual(response_invalid.data["error"]["code"], "VALIDATION_ERROR")
-
-        with patch.object(ProductByCategoriesView, "service", service_mock):
-            request_empty = self.factory.get(
-                "/api/products/by-categories/", {"categoryIds": " , "}
-            )
-            response_empty = self.dispatch(request_empty, ProductByCategoriesView)
-        self.assertEqual(response_empty.status_code, 200)
-        self.assertEqual(response_empty.data, [])
-
-        with patch.object(ProductByCategoriesView, "service", service_mock):
-            request_valid = self.factory.get(
-                "/api/products/by-categories/", {"categoryIds": "1, 2"}
-            )
-            response_valid = self.dispatch(request_valid, ProductByCategoriesView)
-        self.assertEqual(response_valid.status_code, 200)
-        service_mock.list_products_by_category_ids.assert_called_once_with([1, 2])
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.data["error"]["code"], "UNAUTHORIZED")

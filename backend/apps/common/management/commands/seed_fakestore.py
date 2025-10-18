@@ -224,7 +224,6 @@ USERS = [
         "username": "johnd",
         "password": "m38rmF$",
         "phone": "1-570-236-7033",
-        "is_superuser": True,
     },
     {
         "id": 2,
@@ -234,7 +233,6 @@ USERS = [
         "username": "mor_2314",
         "password": "83r5^_",
         "phone": "1-570-236-7033",
-        "is_staff": True,
     },
     {
         "id": 3,
@@ -308,6 +306,24 @@ USERS = [
         "password": "klein*#%*",
         "phone": "1-104-001-4567",
     },
+    {
+        "id": 11,
+        "first_name": "admin",
+        "last_name": "user",
+        "email": "admin@fakestore.com",
+        "username": "admin",
+        "password": "AdminPass123!",
+        "is_superuser": True
+    },
+    {
+        "id": 12,
+        "first_name": "staff",
+        "last_name": "user",
+        "email": "staff@fakestore.com",
+        "username": "staff",
+        "password": "StaffPass123!",
+        "is_staff": True
+    }
 ]
 
 ADDRESSES = [

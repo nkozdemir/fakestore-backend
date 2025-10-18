@@ -45,7 +45,6 @@ Authentication & Permissions
 - Users: Auth required for all endpoints; only staff/superusers may create users or list all users.
 - Carts: Auth required for all endpoints; cart reads are limited to the owner unless staff/superuser.
 - Special cases:
-  - `GET /api/products/by-categories/`: Public
   - Product ratings: `GET /api/products/<id>/rating/` exposes the caller's summary (staff can target other users via `userId`); `GET /api/products/<id>/ratings/` is public and lists every rating with `id`, value, and optional first/last name metadata; `POST`/`DELETE` require auth and staff can override the target user via `userId`
   - `GET /api/users/<id>/`: Auth required; user must match the path or be staff/superuser
   - Cart GET endpoints: Auth required; list requires staff/superuser, detail/user views require the owner or staff/superuser
@@ -54,7 +53,6 @@ Attach a JWT access token for protected routes using the `Authorization: Bearer 
 
 ### Products
 - Public: `GET /api/products/` (optional `?category=electronics`)
-- Public: `GET /api/products/by-categories/?categoryIds=1,2,3` (filter by one or more category IDs)
 - Auth required: `POST /api/products/`
 - Public: `GET /api/products/<id>/`
 - Auth required: `PUT /api/products/<id>/`
@@ -205,7 +203,7 @@ Covered areas and endpoints:
   - `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/refresh`, `GET /api/auth/me`, `POST /api/auth/logout`, `POST /api/auth/logout-all`
 - Catalog
   - Products: `GET/POST /api/products/`, `GET/PUT/PATCH/DELETE /api/products/:id/`
-  - Filters: `GET /api/products/?category=...`, `GET /api/products/by-categories/?categoryIds=1,2` (valid/empty/invalid)
+  - Filters: `GET /api/products/?category=...`
   - Categories: `GET/POST /api/categories/`, `GET/PUT/PATCH/DELETE /api/categories/:id/`
   - Ratings: `GET/POST/DELETE /api/products/:id/rating/`
   - Error envelope: 404 and validation error cases

@@ -26,13 +26,6 @@ class ProductRepository(GenericRepository[Product]):
             categories__name=category_name
         ).prefetch_related("categories")
 
-    def list_by_category_ids(self, category_ids):
-        return (
-            self.model.objects.filter(categories__id__in=category_ids)
-            .distinct()
-            .prefetch_related("categories")
-        )
-
     # --- Helper methods for service orchestration ---
     def set_categories(self, product: Product, category_ids):
         from .models import Category  # local import to avoid circulars in migrations
