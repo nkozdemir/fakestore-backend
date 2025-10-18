@@ -94,7 +94,7 @@ class AuthViewsUnitTests(unittest.TestCase):
             {
                 "username": "newuser",
                 "email": "new@example.com",
-                "password": "Secret123",
+                "password": "Secret123!",
                 "first_name": "First",
                 "last_name": "Last",
                 "phone": "1234567890",
@@ -118,7 +118,7 @@ class AuthViewsUnitTests(unittest.TestCase):
             {
                 "username": "taken",
                 "email": "other@example.com",
-                "password": "Secret123",
+                "password": "Secret123!",
                 "first_name": "A",
                 "last_name": "B",
             }
@@ -133,6 +133,40 @@ class AuthViewsUnitTests(unittest.TestCase):
         with self.assertRaises(DRFValidationError):
             view.post(missing)
         service.register.assert_called_once()
+
+    def test_register_rejects_invalid_username(self):
+        service = Mock()
+        request = DummyRequest(
+            {
+                "username": "bad!",
+                "email": "test@example.com",
+                "password": "Valid1!",
+                "first_name": "First",
+                "last_name": "Last",
+            }
+        )
+        view = RegisterView()
+        view.service = service
+        with self.assertRaises(DRFValidationError):
+            view.post(request)
+        service.register.assert_not_called()
+
+    def test_register_rejects_weak_password(self):
+        service = Mock()
+        request = DummyRequest(
+            {
+                "username": "goodname",
+                "email": "test@example.com",
+                "password": "weakpw",
+                "first_name": "First",
+                "last_name": "Last",
+            }
+        )
+        view = RegisterView()
+        view.service = service
+        with self.assertRaises(DRFValidationError):
+            view.post(request)
+        service.register.assert_not_called()
 
     def test_me_view_returns_profile(self):
         user = types.SimpleNamespace(

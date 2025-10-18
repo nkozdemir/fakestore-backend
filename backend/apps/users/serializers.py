@@ -2,6 +2,10 @@ from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 from .dtos import UserDTO, AddressDTO
 from .models import User
+from .validators import (
+    validate_password as validate_password_rules,
+    validate_username as validate_username_rules,
+)
 
 
 class AddressSerializer(serializers.Serializer):
@@ -82,6 +86,12 @@ class UserSerializer(serializers.Serializer):
                     {field: "This field is required." for field in missing}
                 )
         return super().validate(attrs)
+
+    def validate_username(self, value: str) -> str:
+        return validate_username_rules(value)
+
+    def validate_password(self, value: str) -> str:
+        return validate_password_rules(value)
 
     @staticmethod
     def _extract_name(obj, attr: str):

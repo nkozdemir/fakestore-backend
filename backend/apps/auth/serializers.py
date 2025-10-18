@@ -1,5 +1,10 @@
 from rest_framework import serializers
 
+from apps.users.validators import (
+    validate_password as validate_password_rules,
+    validate_username as validate_username_rules,
+)
+
 
 class RegisterRequestSerializer(serializers.Serializer):
     username = serializers.CharField()
@@ -7,6 +12,12 @@ class RegisterRequestSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
     first_name = serializers.CharField()
     last_name = serializers.CharField()
+
+    def validate_username(self, value: str) -> str:
+        return validate_username_rules(value)
+
+    def validate_password(self, value: str) -> str:
+        return validate_password_rules(value)
 
 
 class RegisterResponseSerializer(serializers.Serializer):
