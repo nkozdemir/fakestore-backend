@@ -3,6 +3,7 @@ import unittest
 from unittest.mock import Mock, patch
 from rest_framework.test import APIRequestFactory, force_authenticate
 from apps.carts.views import CartListView, CartDetailView, CartByUserView
+from apps.carts.services import CartAlreadyExistsError
 from apps.api.validation import validate_request_context
 
 
@@ -96,6 +97,7 @@ class CartViewsUnitTests(unittest.TestCase):
         carts = make_cart_payload(cart_id=2, user_id=7)
         service_mock = Mock()
         service_mock.create_cart.return_value = carts
+        service_mock.get_cart_for_user.return_value = None
         user = types.SimpleNamespace(
             id=7, is_authenticated=True, is_staff=False, is_superuser=False
         )
@@ -117,6 +119,7 @@ class CartViewsUnitTests(unittest.TestCase):
         carts = make_cart_payload(cart_id=5, user_id=99)
         service_mock = Mock()
         service_mock.create_cart.return_value = carts
+        service_mock.get_cart_for_user.return_value = None
         admin = types.SimpleNamespace(
             id=1, is_authenticated=True, is_staff=True, is_superuser=False
         )
@@ -136,6 +139,7 @@ class CartViewsUnitTests(unittest.TestCase):
     def test_cart_list_post_non_admin_cannot_create_for_other_user(self):
         service_mock = Mock()
         service_mock.create_cart.return_value = make_cart_payload(cart_id=6, user_id=3)
+        service_mock.get_cart_for_user.return_value = None
         user = types.SimpleNamespace(
             id=3, is_authenticated=True, is_staff=False, is_superuser=False
         )
@@ -146,6 +150,23 @@ class CartViewsUnitTests(unittest.TestCase):
             response = self.dispatch(request, CartListView)
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.data["error"]["code"], "FORBIDDEN")
+        service_mock.create_cart.assert_not_called()
+
+    def test_cart_list_post_conflict_when_cart_exists(self):
+        service_mock = Mock()
+        service_mock.get_cart_for_user.return_value = make_cart_payload(
+            cart_id=10, user_id=5
+        )
+        service_mock.create_cart.return_value = make_cart_payload(cart_id=11, user_id=5)
+        user = types.SimpleNamespace(
+            id=5, is_authenticated=True, is_staff=False, is_superuser=False
+        )
+        with patch.object(CartListView, "service", service_mock):
+            request = self.factory.post("/api/carts/", {"products": []}, format="json")
+            self.authenticate(request, user)
+            response = self.dispatch(request, CartListView)
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.data["error"]["code"], "CONFLICT")
         service_mock.create_cart.assert_not_called()
 
     def test_cart_detail_get_not_found_returns_error(self):
@@ -195,6 +216,20 @@ class CartViewsUnitTests(unittest.TestCase):
             response = self.dispatch(request, CartDetailView, cart_id=1)
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.data["error"]["code"], "NOT_FOUND")
+
+    def test_cart_detail_put_conflict_when_reassigning_to_user_with_cart(self):
+        service_mock = Mock()
+        service_mock.update_cart.side_effect = CartAlreadyExistsError("exists")
+        user = types.SimpleNamespace(
+            id=9, is_authenticated=True, is_staff=True, is_superuser=False
+        )
+        payload = {"user_id": 4}
+        with patch.object(CartDetailView, "service", service_mock):
+            request = self.factory.put("/api/carts/2/", payload, format="json")
+            self.authenticate(request, user)
+            response = self.dispatch(request, CartDetailView, cart_id=2)
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.data["error"]["code"], "CONFLICT")
 
     def test_cart_detail_put_forbidden_reassign_by_non_admin(self):
         service_mock = Mock()
@@ -255,6 +290,20 @@ class CartViewsUnitTests(unittest.TestCase):
             response = self.dispatch(request, CartDetailView, cart_id=1)
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.data["error"]["code"], "NOT_FOUND")
+
+    def test_cart_detail_patch_conflict_when_reassigning(self):
+        service_mock = Mock()
+        service_mock.patch_operations.side_effect = CartAlreadyExistsError("exists")
+        admin = types.SimpleNamespace(
+            id=1, is_authenticated=True, is_staff=True, is_superuser=False
+        )
+        payload = {"userId": 7}
+        with patch.object(CartDetailView, "service", service_mock):
+            request = self.factory.patch("/api/carts/1/", payload, format="json")
+            self.authenticate(request, admin)
+            response = self.dispatch(request, CartDetailView, cart_id=1)
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.data["error"]["code"], "CONFLICT")
 
     def test_cart_detail_patch_forbidden_reassign_by_non_admin(self):
         service_mock = Mock()

@@ -8,6 +8,7 @@ from apps.common import get_logger
 from .dtos import address_to_dto, user_to_dto
 from .models import User
 from .protocols import AddressRepositoryProtocol, UserRepositoryProtocol
+from apps.carts.utils import ensure_user_cart
 
 logger = get_logger(__name__).bind(component="users", layer="service")
 
@@ -55,7 +56,9 @@ class UserService:
             )
         self.logger.info("User created", user_id=user.id, username=user.username)
         refreshed = self.users.get(id=user.id)
-        return user_to_dto(refreshed) if refreshed else user_to_dto(user)
+        target = refreshed if refreshed else user
+        ensure_user_cart(target)
+        return user_to_dto(target)
 
     def update_user(self, user_id: int, data: Dict[str, Any]):
         self.logger.info("Updating user", user_id=user_id)

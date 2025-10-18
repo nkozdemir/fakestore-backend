@@ -7,7 +7,7 @@ from apps.catalog.models import Product
 class Cart(models.Model):
     # Use auto-incrementing PK so DB assigns IDs on insert
     id = models.AutoField(primary_key=True)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="carts")
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="cart")
     date = models.DateField(default=timezone.now)
 
     def __str__(self):

@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from apps.carts.services import CartService
+from apps.carts.services import CartService, CartAlreadyExistsError
 from apps.carts.mappers import CartMapper, CartProductMapper
 from apps.catalog.mappers import ProductMapper
 
@@ -78,7 +78,12 @@ class FakeCartRepository:
         self._pk = 1
 
     def create(self, **data):
-        cart = StubCart(self._pk, data.get("user_id"), data.get("date"))
+        user_id = data.get("user_id")
+        if user_id is None:
+            raise ValueError("user_id is required")
+        if any(c.user_id == user_id for c in self._storage.values()):
+            raise ValueError("Cart already exists for user")
+        cart = StubCart(self._pk, user_id, data.get("date"))
         self._storage[self._pk] = cart
         self._pk += 1
         return cart
@@ -86,10 +91,16 @@ class FakeCartRepository:
     def get(self, **filters):
         cart_id = filters.get("id")
         user_id = filters.get("user_id")
-        cart = self._storage.get(cart_id)
-        if cart and user_id is not None and cart.user_id != user_id:
-            return None
-        return cart
+        if cart_id is not None:
+            cart = self._storage.get(cart_id)
+            if cart and user_id is not None and cart.user_id != user_id:
+                return None
+            return cart
+        if user_id is not None:
+            for cart in self._storage.values():
+                if cart.user_id == user_id:
+                    return cart
+        return None
 
     def list(self, **filters):
         user_id = filters.get("user_id")
@@ -192,6 +203,11 @@ class CartServiceUnitTests(unittest.TestCase):
         fetched = self.service.get_cart(dto.id)
         self.assertEqual(len(fetched.items), 2)
 
+    def test_create_cart_raises_when_cart_exists(self):
+        self.service.create_cart(4, {"products": []})
+        with self.assertRaises(CartAlreadyExistsError):
+            self.service.create_cart(4, {"products": []})
+
     def test_update_cart_replace_items(self):
         dto = self.service.create_cart(
             6,
@@ -293,6 +309,10 @@ class CartServiceUnitTests(unittest.TestCase):
         result = self.service.delete_cart(dto.id)
         self.assertTrue(result)
         self.assertIsNone(self.service.get_cart(dto.id))
+        replacement = self.cart_repo.get(user_id=8)
+        self.assertIsNotNone(replacement)
+        self.assertNotEqual(replacement.id, dto.id)
+        self.assertEqual(replacement._items, [])
 
 
 if __name__ == "__main__":

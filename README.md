@@ -43,7 +43,7 @@ Authentication & Permissions
 - Username availability is determined via `GET /api/auth/validate-username/?username=<value>` and returns `{ "username": "...", "available": true/false }`.
 - Products & Categories: Public GETs; POST/PUT/PATCH/DELETE require auth
 - Users: Auth required for all endpoints; only staff/superusers may create users or list all users.
-- Carts: Auth required for all endpoints; cart reads are limited to the owner unless staff/superuser.
+- Carts: Auth required for all endpoints; cart reads are limited to the owner unless staff/superuser. Every user automatically receives an empty cart and may only possess a single cart.
 - Special cases:
   - Product ratings: `GET /api/products/<id>/rating/` exposes the caller's summary (staff can target other users via `userId`); `GET /api/products/<id>/ratings/` is public and lists every rating with `id`, value, and optional first/last name metadata; `POST`/`DELETE` require auth and staff can override the target user via `userId`
   - `GET /api/users/<id>/`: Auth required; user must match the path or be staff/superuser
@@ -108,7 +108,7 @@ Pagination (Products list):
 ### Carts
 - Auth required (staff/superuser): `GET /api/carts/` (optional `?userId=1`)
 - Auth required (self or staff/superuser): `GET /api/carts/users/<user_id>/` (list carts for a specific user)
-- Auth required: `POST /api/carts/`
+- Auth required: `POST /api/carts/` *(returns 409 if the user already has a cart)*
 - Auth required (self or staff/superuser): `GET /api/carts/<id>/`
 - Auth required: `PUT /api/carts/<id>/`
 - Auth required: `PATCH /api/carts/<id>/` (advanced item operations)
@@ -129,7 +129,7 @@ Rules:
 - update: sets quantity exactly (creates if absent)
 - remove: deletes line items by product_id
 - date: ISO date/datetime string (date part stored)
-- userId: reassign cart to another user (no auth rules yet)
+- userId: reassign cart to another user (staff/admin only; target user must not already have a cart)
 
 Compatibility: older `user_id` query param is still accepted, but `userId` is preferred and documented.
 
@@ -252,5 +252,5 @@ Notes:
 - Tests authenticate via JWT where needed (using the login endpoint and attaching the `Authorization: Bearer <token>` header).
 
 ## Notes
-- Unified seeding command: `python manage.py seed_fakestore [--flush]` loads the full dataset (products, users, addresses, carts, cart items).
+- Unified seeding command: `python manage.py seed_fakestore [--flush]` loads the full dataset (products, users, addresses) and ensures each user has an empty cart.
 - Error codes are centralized in `apps/api/utils.py` (`error_response`). Add new codes there.

@@ -1,6 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.db import transaction, connection
 from django.core.management.color import no_style
+from django.utils import timezone
 from apps.catalog.models import Category, Product, ProductCategory
 from apps.users.models import User, Address
 from apps.carts.models import Cart, CartProduct
@@ -339,40 +340,6 @@ ADDRESSES = [
     (10, "oak lawn ave", 526, "fort wayne", "10256-4532", 30.24788, -20.545419),
 ]
 
-CARTS = [
-    (1, 1, "2020-03-02"),
-    (2, 1, "2020-01-02"),
-    (3, 2, "2020-03-01"),
-    (4, 3, "2020-01-01"),
-    (5, 3, "2020-03-01"),
-    (6, 4, "2020-03-01"),
-    (7, 8, "2020-03-01"),
-]
-
-CART_PRODUCTS = [
-    # Cart 1
-    (1, 1, 4),
-    (1, 2, 1),
-    (1, 3, 6),
-    # Cart 2
-    (2, 2, 4),
-    (2, 1, 10),
-    (2, 5, 2),
-    # Cart 3
-    (3, 1, 2),
-    (3, 9, 1),
-    # Cart 4
-    (4, 1, 4),
-    # Cart 5
-    (5, 7, 1),
-    (5, 8, 1),
-    # Cart 6
-    (6, 10, 2),
-    (6, 12, 3),
-    # Cart 7
-    (7, 18, 1),
-]
-
 
 class Command(BaseCommand):
     help = "Seed the entire fakestore dataset in one operation."
@@ -469,33 +436,13 @@ class Command(BaseCommand):
                 longitude=lon,
             )
 
-        self.stdout.write("Seeding carts...")
-        for cid, uid, date in CARTS:
-            user = User.objects.get(id=uid)
-            Cart.objects.get_or_create(id=cid, defaults=dict(user=user, date=date))
-
-        self.stdout.write("Seeding cart products...")
-        # Build a set of existing product ids to avoid repeated queries
-        existing_product_ids = set(Product.objects.values_list("id", flat=True))
-        for cart_id, product_id, qty in CART_PRODUCTS:
-            cart = Cart.objects.get(id=cart_id)
-            if product_id not in existing_product_ids:
-                # Create placeholder product if not defined in PRODUCTS list
-                placeholder, _ = Product.objects.get_or_create(
-                    id=product_id,
-                    defaults=dict(
-                        title=f"Placeholder Product {product_id}",
-                        price=0,
-                        description="Auto-generated placeholder created during seeding due to reference in cart.",
-                        image="",
-                        rate=0,
-                        count=0,
-                    ),
-                )
-                existing_product_ids.add(product_id)
-            product = Product.objects.get(id=product_id)
-            CartProduct.objects.get_or_create(
-                cart=cart, product=product, defaults=dict(quantity=qty)
+        self.stdout.write("Ensuring empty carts for all users...")
+        CartProduct.objects.all().delete()
+        today = timezone.now().date()
+        for user in User.objects.all():
+            Cart.objects.update_or_create(
+                user=user,
+                defaults={"date": today},
             )
 
         # After inserting explicit IDs, reset sequences for these models so future

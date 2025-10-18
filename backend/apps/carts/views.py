@@ -4,6 +4,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from .container import build_cart_service
+from .services import CartAlreadyExistsError
 from .serializers import (
     CartReadSerializer,
     CartWriteSerializer,
@@ -107,6 +108,7 @@ class CartListView(APIView):
             400: OpenApiResponse(response=ErrorResponseSerializer),
             401: OpenApiResponse(response=ErrorResponseSerializer),
             403: OpenApiResponse(response=ErrorResponseSerializer),
+            409: OpenApiResponse(response=ErrorResponseSerializer),
         },
     )
     def post(self, request):
@@ -148,13 +150,37 @@ class CartListView(APIView):
                     "You do not have permission to create carts for other users",
                     {"userId": str(desired_user_id)},
                 )
+        existing = self.service.get_cart_for_user(int(target_user_id))
+        if existing:
+            self.log.warning(
+                "Cart creation conflict",
+                actor_id=user_id,
+                target_user_id=target_user_id,
+            )
+            return error_response(
+                "CONFLICT",
+                "User already has a cart",
+                {"userId": str(target_user_id)},
+            )
         self.log.info(
             "Creating cart via API",
             user_id=target_user_id,
             actor_id=user_id,
             privileged=is_privileged,
         )
-        dto = self.service.create_cart(int(target_user_id), payload)
+        try:
+            dto = self.service.create_cart(int(target_user_id), payload)
+        except CartAlreadyExistsError:
+            self.log.warning(
+                "Cart creation conflict (race)",
+                actor_id=user_id,
+                target_user_id=target_user_id,
+            )
+            return error_response(
+                "CONFLICT",
+                "User already has a cart",
+                {"userId": str(target_user_id)},
+            )
         cart_id = getattr(dto, "id", None)
         if cart_id is None and isinstance(dto, dict):
             cart_id = dto.get("id")
@@ -221,6 +247,7 @@ class CartDetailView(APIView):
             400: OpenApiResponse(response=ErrorResponseSerializer),
             401: OpenApiResponse(response=ErrorResponseSerializer),
             404: OpenApiResponse(response=ErrorResponseSerializer),
+            409: OpenApiResponse(response=ErrorResponseSerializer),
         },
     )
     def put(self, request, cart_id: int):
@@ -251,9 +278,23 @@ class CartDetailView(APIView):
             actor_id=actor_id,
             scoped_user_id=scope_user_id,
         )
-        dto = self.service.update_cart(
-            cart_id, serializer.validated_data, user_id=scope_user_id
-        )
+        try:
+            dto = self.service.update_cart(
+                cart_id, serializer.validated_data, user_id=scope_user_id
+            )
+        except CartAlreadyExistsError:
+            conflict_user = serializer.validated_data.get("user_id")
+            self.log.warning(
+                "Cart replace conflict",
+                cart_id=cart_id,
+                actor_id=actor_id,
+                target_user=conflict_user,
+            )
+            return error_response(
+                "CONFLICT",
+                "Target user already has a cart",
+                {"userId": str(conflict_user) if conflict_user is not None else None},
+            )
         if not dto:
             self.log.warning(
                 "Cart replace failed: not found",
@@ -277,6 +318,7 @@ class CartDetailView(APIView):
             400: OpenApiResponse(response=ErrorResponseSerializer),
             401: OpenApiResponse(response=ErrorResponseSerializer),
             404: OpenApiResponse(response=ErrorResponseSerializer),
+            409: OpenApiResponse(response=ErrorResponseSerializer),
         },
     )
     def patch(self, request, cart_id: int):
@@ -308,9 +350,23 @@ class CartDetailView(APIView):
             actor_id=actor_id,
             scoped_user_id=scope_user_id,
         )
-        dto = self.service.patch_operations(
-            cart_id, ops_serializer.validated_data, user_id=scope_user_id
-        )
+        try:
+            dto = self.service.patch_operations(
+                cart_id, ops_serializer.validated_data, user_id=scope_user_id
+            )
+        except CartAlreadyExistsError:
+            conflict_user = ops_serializer.validated_data.get("userId")
+            self.log.warning(
+                "Cart patch conflict",
+                cart_id=cart_id,
+                actor_id=actor_id,
+                target_user=conflict_user,
+            )
+            return error_response(
+                "CONFLICT",
+                "Target user already has a cart",
+                {"userId": str(conflict_user) if conflict_user is not None else None},
+            )
         if not dto:
             self.log.warning(
                 "Cart patch failed: not found",

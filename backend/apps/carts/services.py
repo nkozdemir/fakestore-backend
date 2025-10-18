@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from django.db import transaction
+from django.db import transaction, IntegrityError
+from django.utils import timezone
 
 from apps.common import get_logger
 from .commands import (
@@ -20,6 +21,11 @@ from .protocols import (
 )
 
 logger = get_logger(__name__).bind(component="carts", layer="service")
+
+
+class CartAlreadyExistsError(Exception):
+    """Raised when attempting to create more than one cart for a user."""
+
 
 
 class CartService:
@@ -41,6 +47,10 @@ class CartService:
         qs = self.carts.list(user_id=user_id) if user_id else self.carts.list()
         return self.cart_mapper.many_to_dto(qs)
 
+    def get_cart_for_user(self, user_id: int):
+        cart = self.carts.get(user_id=user_id)
+        return self.cart_mapper.to_dto(cart) if cart else None
+
     def get_cart(self, cart_id: int):
         self.logger.debug("Fetching cart", cart_id=cart_id)
         cart = self.carts.get(id=cart_id)
@@ -50,6 +60,11 @@ class CartService:
 
     def create_cart(self, user_id: int, data: Dict[str, Any]):
         self.logger.info("Creating cart", user_id=user_id)
+        if self.carts.get(user_id=user_id):
+            self.logger.warning(
+                "Cart creation rejected: user already has cart", user_id=user_id
+            )
+            raise CartAlreadyExistsError(f"User {user_id} already has a cart")
         payload = dict(data)
         payload["userId"] = user_id
         command = (
@@ -58,12 +73,23 @@ class CartService:
             else CartCreateCommand.from_raw(payload)
         )
         create_kwargs: Dict[str, Any] = {
-            "date": command.date,
+            "date": command.date or timezone.now().date(),
+            "user_id": user_id,
         }
-        if command.user_id is not None:
-            create_kwargs["user_id"] = command.user_id
         with transaction.atomic():
-            cart: Cart = self.carts.create(**create_kwargs)
+            try:
+                cart: Cart = self.carts.create(**create_kwargs)
+            except Exception as exc:
+                if isinstance(exc, (IntegrityError, ValueError)):
+                    self.logger.warning(
+                        "Cart creation failed during insert",
+                        user_id=user_id,
+                        error=str(exc),
+                    )
+                    raise CartAlreadyExistsError(
+                        f"User {user_id} already has a cart"
+                    ) from exc
+                raise
             for item in command.items:
                 product = self.products.get(id=item.product_id)
                 if not product:
@@ -96,6 +122,17 @@ class CartService:
             "user_id": command.user_id,
             "date": command.date,
         }
+        if (
+            command.user_id is not None
+            and command.user_id != cart.user_id
+            and self.carts.get(user_id=command.user_id)
+        ):
+            self.logger.warning(
+                "Cart update rejected: target user already has a cart",
+                cart_id=cart_id,
+                target_user=command.user_id,
+            )
+            raise CartAlreadyExistsError("Target user already has a cart")
         original_fields = {
             field: getattr(cart, field)
             for field, value in update_kwargs.items()
@@ -145,10 +182,21 @@ class CartService:
                 "Cart deletion failed: not found", cart_id=cart_id, user_id=user_id
             )
             return False
+        owner_id = cart.user_id
         with transaction.atomic():
             for cart_product in self.cart_products.list_for_cart(cart.id):
                 self.cart_products.delete(cart_product)
             self.carts.delete(cart)
+            if owner_id is not None:
+                self.logger.debug(
+                    "Recreating empty cart after deletion", user_id=owner_id
+                )
+                try:
+                    self.carts.create(user_id=owner_id, date=timezone.now().date())
+                except Exception:
+                    self.logger.warning(
+                        "Failed to recreate cart after deletion", user_id=owner_id
+                    )
         self.logger.info("Cart deleted", cart_id=cart_id, user_id=user_id)
         return True
 
@@ -199,12 +247,23 @@ class CartService:
         if new_date:
             cart.date = new_date
             changed = True
-        if new_user_id:
+        if new_user_id is not None:
             try:
-                cart.user_id = int(new_user_id)
-                changed = True
+                target_user_id = int(new_user_id)
             except (ValueError, TypeError):
-                pass
+                target_user_id = None
+            if target_user_id and target_user_id != cart.user_id:
+                if self.carts.get(user_id=target_user_id):
+                    self.logger.warning(
+                        "Cart reassignment rejected: target user already has a cart",
+                        cart_id=cart.id,
+                        new_user_id=target_user_id,
+                    )
+                    raise CartAlreadyExistsError(
+                        "Target user already has a cart"
+                    )
+                cart.user_id = target_user_id
+                changed = True
         if changed:
             cart.save()
 

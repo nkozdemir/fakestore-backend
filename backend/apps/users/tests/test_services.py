@@ -139,6 +139,9 @@ class UserServiceUnitTests(unittest.TestCase):
             "apps.users.services.transaction.atomic", DummyAtomic()
         )
         self.atomic_patcher.start()
+        self.cart_patcher = patch("apps.users.services.ensure_user_cart")
+        self.mock_ensure_cart = self.cart_patcher.start()
+        self.mock_ensure_cart.reset_mock()
         self.service = UserService(
             users=self.user_repo,
             addresses=self.address_repo,
@@ -146,6 +149,7 @@ class UserServiceUnitTests(unittest.TestCase):
 
     def tearDown(self):
         self.atomic_patcher.stop()
+        self.cart_patcher.stop()
 
     def _user_to_dict(self, user):
         return {
@@ -192,6 +196,7 @@ class UserServiceUnitTests(unittest.TestCase):
         self.assertEqual(dto["addresses"], [1])
         stored_user = self.user_repo.get(id=dto["id"])
         self.assertEqual(stored_user.password, "hashed:Secret123")
+        self.mock_ensure_cart.assert_called_once_with(stored_user)
 
     def test_update_user_returns_none_for_missing_user(self):
         result = self.service.update_user(99, {"username": "ghost"})
