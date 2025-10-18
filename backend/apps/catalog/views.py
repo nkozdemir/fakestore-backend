@@ -485,6 +485,16 @@ class ProductRatingView(APIView):
         user_id = self._current_user_id(request)
         user = getattr(request, "user", None)
         actor_id = getattr(user, "id", None)
+        is_staff = bool(getattr(user, "is_staff", False) or getattr(user, "is_superuser", False))
+        if is_staff and (user_id is None or user_id == actor_id):
+            self.log.warning(
+                "Staff/admin attempted to rate own account",
+                product_id=product_id,
+                actor_id=actor_id,
+            )
+            return error_response(
+                "FORBIDDEN", "Staff and admin accounts cannot rate products for themselves"
+            )
         is_privileged = bool(
             getattr(request, "is_privileged_user", False)
             or getattr(user, "is_staff", False)
@@ -588,6 +598,16 @@ class ProductRatingView(APIView):
         user_id = self._current_user_id(request)
         user = getattr(request, "user", None)
         actor_id = getattr(user, "id", None)
+        is_staff = bool(getattr(user, "is_staff", False) or getattr(user, "is_superuser", False))
+        if is_staff and (user_id is None or user_id == actor_id):
+            self.log.warning(
+                "Staff/admin attempted to delete own rating",
+                product_id=product_id,
+                actor_id=actor_id,
+            )
+            return error_response(
+                "FORBIDDEN", "Staff and admin accounts cannot rate products for themselves"
+            )
         is_privileged = bool(
             getattr(request, "is_privileged_user", False)
             or getattr(user, "is_staff", False)

@@ -1,5 +1,6 @@
 import unittest
 from unittest.mock import patch
+from datetime import datetime
 from apps.users.services import UserService
 
 
@@ -122,6 +123,7 @@ class FakeUser:
         self.phone = attrs.get("phone", "")
         self.password = attrs.get("password", "")
         self.addresses = FakeAddressManager()
+        self.date_joined = attrs.get("date_joined", datetime.utcnow())
 
     def set_password(self, password):
         self.password = f"hashed:{password}"
@@ -159,6 +161,7 @@ class UserServiceUnitTests(unittest.TestCase):
             "first_name": user.first_name,
             "last_name": user.last_name,
             "phone": user.phone,
+            "date_joined": getattr(user, "date_joined", None),
             "addresses": [addr.id for addr in user.addresses.all()],
         }
 

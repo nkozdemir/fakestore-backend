@@ -440,6 +440,9 @@ class Command(BaseCommand):
         CartProduct.objects.all().delete()
         today = timezone.now().date()
         for user in User.objects.all():
+            if user.is_staff or user.is_superuser:
+                Cart.objects.filter(user=user).delete()
+                continue
             Cart.objects.update_or_create(
                 user=user,
                 defaults={"date": today},

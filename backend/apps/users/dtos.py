@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 from .models import User, Address
 
 
@@ -22,6 +22,7 @@ class UserDTO:
     email: str
     username: str
     phone: str
+    date_joined: Optional[str]
     addresses: List[AddressDTO]
 
 
@@ -38,6 +39,12 @@ def address_to_dto(a: Address) -> AddressDTO:
 
 
 def user_to_dto(u: User) -> UserDTO:
+    joined = getattr(u, "date_joined", None)
+    if joined is not None:
+        try:
+            joined = joined.isoformat()
+        except AttributeError:
+            joined = str(joined)
     return UserDTO(
         id=u.id,
         first_name=u.first_name,
@@ -45,5 +52,6 @@ def user_to_dto(u: User) -> UserDTO:
         email=u.email,
         username=u.username,
         phone=u.phone,
+        date_joined=joined,
         addresses=[address_to_dto(a) for a in u.addresses.all()],
     )

@@ -21,6 +21,8 @@ from .serializers import (
     MeResponseSerializer,
     LogoutRequestSerializer,
     DetailResponseSerializer,
+    CustomerTokenObtainPairSerializer,
+    StaffTokenObtainPairSerializer,
 )
 from .container import build_registration_service
 
@@ -104,11 +106,18 @@ class RegisterView(APIView):
 @extend_schema(tags=["Auth"], summary="Login (JWT obtain pair)")
 class LoginView(TokenObtainPairView):
     permission_classes = [AllowAny]
+    serializer_class = CustomerTokenObtainPairSerializer
 
 
 @extend_schema(tags=["Auth"], summary="Refresh JWT")
 class RefreshView(TokenRefreshView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
+
+
+@extend_schema(tags=["Auth"], summary="Staff/Admin Login (JWT obtain pair)")
+class StaffLoginView(TokenObtainPairView):
+    permission_classes = [AllowAny]
+    serializer_class = StaffTokenObtainPairSerializer
 
 
 @extend_schema(
@@ -130,6 +139,9 @@ class MeView(APIView):
                 "last_name": getattr(user, "last_name", ""),
                 "last_login": user.last_login.isoformat()
                 if getattr(user, "last_login", None)
+                else None,
+                "date_joined": user.date_joined.isoformat()
+                if getattr(user, "date_joined", None)
                 else None,
                 "is_staff": user.is_staff,
                 "is_superuser": user.is_superuser,

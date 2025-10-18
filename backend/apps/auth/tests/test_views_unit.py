@@ -10,6 +10,11 @@ from apps.auth.views import (
     LogoutView,
     LogoutAllView,
 )
+from apps.auth.serializers import (
+    CustomerTokenObtainPairSerializer,
+    StaffTokenObtainPairSerializer,
+)
+from rest_framework.exceptions import ValidationError
 
 
 class DummyRequest:
@@ -82,6 +87,41 @@ class AuthViewsUnitTests(unittest.TestCase):
 
     def tearDown(self):
         self.user_patch.stop()
+
+
+class TokenSerializerTests(unittest.TestCase):
+    def test_customer_serializer_rejects_staff(self):
+        serializer = CustomerTokenObtainPairSerializer()
+
+        def fake_validate(self, attrs):
+            self.user = types.SimpleNamespace(is_staff=True, is_superuser=False)
+            return {"access": "a", "refresh": "b"}
+
+        with patch("apps.auth.serializers.TokenObtainPairSerializer.validate", fake_validate):
+            with self.assertRaises(ValidationError):
+                serializer.validate({})
+
+    def test_staff_serializer_accepts_staff(self):
+        serializer = StaffTokenObtainPairSerializer()
+
+        def fake_validate(self, attrs):
+            self.user = types.SimpleNamespace(is_staff=True, is_superuser=False)
+            return {"access": "a", "refresh": "b"}
+
+        with patch("apps.auth.serializers.TokenObtainPairSerializer.validate", fake_validate):
+            data = serializer.validate({})
+        self.assertIn("access", data)
+
+    def test_staff_serializer_rejects_non_staff(self):
+        serializer = StaffTokenObtainPairSerializer()
+
+        def fake_validate(self, attrs):
+            self.user = types.SimpleNamespace(is_staff=False, is_superuser=False)
+            return {"access": "a", "refresh": "b"}
+
+        with patch("apps.auth.serializers.TokenObtainPairSerializer.validate", fake_validate):
+            with self.assertRaises(ValidationError):
+                serializer.validate({})
 
     def test_register_success(self):
         service = Mock()
@@ -177,6 +217,7 @@ class AuthViewsUnitTests(unittest.TestCase):
             last_name="User",
             is_staff=True,
             is_superuser=False,
+            date_joined=None,
         )
         response = MeView().get(DummyRequest(user=user))
         self.assertEqual(response.status_code, status.HTTP_200_OK)

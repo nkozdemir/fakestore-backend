@@ -4,7 +4,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from .container import build_cart_service
-from .services import CartAlreadyExistsError
+from .services import CartAlreadyExistsError, CartNotAllowedError
 from .serializers import (
     CartReadSerializer,
     CartWriteSerializer,
@@ -17,6 +17,7 @@ from rest_framework.permissions import IsAuthenticated
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse
 from apps.api.schemas import ErrorResponseSerializer
 from apps.common import get_logger
+from apps.users.models import User
 
 logger = get_logger(__name__).bind(component="carts", layer="view")
 
@@ -150,6 +151,29 @@ class CartListView(APIView):
                     "You do not have permission to create carts for other users",
                     {"userId": str(desired_user_id)},
                 )
+        target_user = (
+            User.objects.filter(id=target_user_id)
+            .values("id", "is_staff", "is_superuser")
+            .first()
+        )
+        if not target_user:
+            self.log.warning(
+                "Cart creation failed: user not found", target_user_id=target_user_id
+            )
+            return error_response(
+                "NOT_FOUND", "Target user not found", {"userId": str(target_user_id)}
+            )
+        if target_user["is_staff"] or target_user["is_superuser"]:
+            self.log.warning(
+                "Cart creation forbidden for staff/admin",
+                actor_id=user_id,
+                target_user_id=target_user_id,
+            )
+            return error_response(
+                "FORBIDDEN",
+                "Staff and admin accounts cannot own carts",
+                {"userId": str(target_user_id)},
+            )
         existing = self.service.get_cart_for_user(int(target_user_id))
         if existing:
             self.log.warning(
@@ -179,6 +203,24 @@ class CartListView(APIView):
             return error_response(
                 "CONFLICT",
                 "User already has a cart",
+                {"userId": str(target_user_id)},
+            )
+        except CartNotAllowedError as exc:
+            self.log.warning(
+                "Cart creation not allowed",
+                actor_id=user_id,
+                target_user_id=target_user_id,
+                error=str(exc),
+            )
+            code = "NOT_FOUND" if "does not exist" in str(exc) else "FORBIDDEN"
+            message = (
+                "Target user not found"
+                if code == "NOT_FOUND"
+                else "Staff and admin accounts cannot own carts"
+            )
+            return error_response(
+                code,
+                message,
                 {"userId": str(target_user_id)},
             )
         cart_id = getattr(dto, "id", None)
@@ -246,6 +288,7 @@ class CartDetailView(APIView):
             200: CartReadSerializer,
             400: OpenApiResponse(response=ErrorResponseSerializer),
             401: OpenApiResponse(response=ErrorResponseSerializer),
+            403: OpenApiResponse(response=ErrorResponseSerializer),
             404: OpenApiResponse(response=ErrorResponseSerializer),
             409: OpenApiResponse(response=ErrorResponseSerializer),
         },
@@ -295,6 +338,25 @@ class CartDetailView(APIView):
                 "Target user already has a cart",
                 {"userId": str(conflict_user) if conflict_user is not None else None},
             )
+        except CartNotAllowedError as exc:
+            conflict_user = serializer.validated_data.get("user_id")
+            self.log.warning(
+                "Cart replace forbidden for staff/admin",
+                cart_id=cart_id,
+                actor_id=actor_id,
+                target_user=conflict_user,
+            )
+            code = "NOT_FOUND" if "does not exist" in str(exc) else "FORBIDDEN"
+            message = (
+                "Target user not found"
+                if code == "NOT_FOUND"
+                else "Staff and admin accounts cannot own carts"
+            )
+            return error_response(
+                code,
+                message,
+                {"userId": str(conflict_user) if conflict_user is not None else None},
+            )
         if not dto:
             self.log.warning(
                 "Cart replace failed: not found",
@@ -317,6 +379,7 @@ class CartDetailView(APIView):
             200: CartReadSerializer,
             400: OpenApiResponse(response=ErrorResponseSerializer),
             401: OpenApiResponse(response=ErrorResponseSerializer),
+            403: OpenApiResponse(response=ErrorResponseSerializer),
             404: OpenApiResponse(response=ErrorResponseSerializer),
             409: OpenApiResponse(response=ErrorResponseSerializer),
         },
@@ -365,6 +428,25 @@ class CartDetailView(APIView):
             return error_response(
                 "CONFLICT",
                 "Target user already has a cart",
+                {"userId": str(conflict_user) if conflict_user is not None else None},
+            )
+        except CartNotAllowedError as exc:
+            conflict_user = ops_serializer.validated_data.get("userId")
+            self.log.warning(
+                "Cart patch forbidden for staff/admin",
+                cart_id=cart_id,
+                actor_id=actor_id,
+                target_user=conflict_user,
+            )
+            code = "NOT_FOUND" if "does not exist" in str(exc) else "FORBIDDEN"
+            message = (
+                "Target user not found"
+                if code == "NOT_FOUND"
+                else "Staff and admin accounts cannot own carts"
+            )
+            return error_response(
+                code,
+                message,
                 {"userId": str(conflict_user) if conflict_user is not None else None},
             )
         if not dto:

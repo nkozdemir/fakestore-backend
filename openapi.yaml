@@ -32,6 +32,32 @@ paths:
               schema:
                 $ref: '#/components/schemas/TokenObtainPair'
           description: ''
+  /api/auth/login/staff/:
+    post:
+      operationId: auth_staff_login_create
+      summary: Staff/Admin Login (JWT obtain pair)
+      description: Issues JWT tokens for staff or admin accounts. Regular users must use `/api/auth/login/` instead.
+      tags:
+      - Auth
+      x-roles-allowed:
+      - staff
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPairRequest'
+        required: true
+      security:
+      - {}
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenObtainPair'
+          description: ''
   /api/auth/logout/:
     post:
       operationId: auth_logout_create
@@ -104,8 +130,6 @@ paths:
       - Auth
       x-roles-allowed:
       - user
-      - staff
-      - admin
       security:
       - jwtAuth: []
       responses:
@@ -231,14 +255,12 @@ paths:
       operationId: carts_create
       description: Creates a new cart for the authenticated user. The user is derived
         from the JWT in the Authorization header; admins may include userId to create
-        carts for other users. Optionally include initial products to seed line items. Returns 409 if the target user already has a cart.
+        carts for other users. Optionally include initial products to seed line items. Returns 409 if the target user already has a cart. Staff and admin accounts cannot own carts.
       summary: Create cart
       tags:
       - Carts
       x-roles-allowed:
       - user
-      - staff
-      - admin
       requestBody:
         content:
           application/json:
@@ -1030,6 +1052,7 @@ paths:
       - admin
       security:
       - jwtAuth: []
+      description: Allows a customer to create or update their rating for the product. Staff and admin accounts are forbidden.
       responses:
         '201':
           content:
@@ -1085,6 +1108,7 @@ paths:
       - admin
       security:
       - jwtAuth: []
+      description: Removes a customer's rating for the product. Staff and admin accounts are forbidden.
       responses:
         '200':
           content:
@@ -2125,6 +2149,9 @@ components:
           type: string
           format: date-time
           nullable: true
+        date_joined:
+          type: string
+          format: date-time
         is_staff:
           type: boolean
         is_superuser:
@@ -2136,6 +2163,7 @@ components:
       - is_staff
       - is_superuser
       - last_name
+      - date_joined
       - username
     PaginatedProductRead:
       type: object
@@ -2443,12 +2471,17 @@ components:
           items:
             $ref: '#/components/schemas/Address'
           readOnly: true
+        date_joined:
+          type: string
+          format: date-time
+          readOnly: true
       required:
       - addresses
       - email
       - id
       - phone
       - username
+      - date_joined
     UserRequest:
       type: object
       properties:

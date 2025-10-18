@@ -41,6 +41,7 @@ class UserSerializer(serializers.Serializer):
     )
     phone = serializers.CharField()
     addresses = AddressSerializer(many=True, read_only=True)
+    date_joined = serializers.DateTimeField(read_only=True)
     first_name = serializers.CharField(
         required=False, allow_blank=True, write_only=True
     )

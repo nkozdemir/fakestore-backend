@@ -3,7 +3,7 @@ import unittest
 from unittest.mock import Mock, patch
 from rest_framework.test import APIRequestFactory, force_authenticate
 from apps.carts.views import CartListView, CartDetailView, CartByUserView
-from apps.carts.services import CartAlreadyExistsError
+from apps.carts.services import CartAlreadyExistsError, CartNotAllowedError
 from apps.api.validation import validate_request_context
 
 
@@ -37,6 +37,37 @@ def make_cart_payload(cart_id=1, user_id=10):
 class CartViewsUnitTests(unittest.TestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
+        self.user_flags = {}
+
+        def filter_side_effect(**filters):
+            user_id = filters.get("id")
+
+            class ValuesWrapper:
+                def __init__(self, info):
+                    self._info = info
+
+                def values(self, *args):
+                    info = self._info
+
+                    class FirstWrapper:
+                        def __init__(self, info):
+                            self._info = info
+
+                        def first(self_inner):
+                            return info
+
+                    return FirstWrapper(info)
+
+            if user_id is None:
+                return ValuesWrapper(None)
+            info = self.user_flags.get(
+                user_id, {"id": user_id, "is_staff": False, "is_superuser": False}
+            )
+            return ValuesWrapper(info)
+
+        self.user_patch = patch("apps.carts.views.User")
+        self.mock_user_cls = self.user_patch.start()
+        self.mock_user_cls.objects.filter.side_effect = filter_side_effect
 
     def dispatch(self, request, view_cls, **kwargs):
         pre_response = validate_request_context(request, view_cls, kwargs)
@@ -48,6 +79,9 @@ class CartViewsUnitTests(unittest.TestCase):
     def authenticate(self, request, user):
         request.user = user
         force_authenticate(request, user=user)
+
+    def tearDown(self):
+        self.user_patch.stop()
 
     @staticmethod
     def _user(user_id, *, staff=False, superuser=False):
@@ -167,6 +201,23 @@ class CartViewsUnitTests(unittest.TestCase):
             response = self.dispatch(request, CartListView)
         self.assertEqual(response.status_code, 409)
         self.assertEqual(response.data["error"]["code"], "CONFLICT")
+        service_mock.create_cart.assert_not_called()
+
+    def test_cart_list_post_for_staff_target_forbidden(self):
+        service_mock = Mock()
+        service_mock.get_cart_for_user.return_value = None
+        service_mock.create_cart.return_value = make_cart_payload(cart_id=12, user_id=50)
+        self.user_flags[50] = {"id": 50, "is_staff": True, "is_superuser": False}
+        admin = types.SimpleNamespace(
+            id=1, is_authenticated=True, is_staff=True, is_superuser=False
+        )
+        payload = {"products": []}
+        with patch.object(CartListView, "service", service_mock):
+            request = self.factory.post("/api/carts/?userId=50", payload, format="json")
+            self.authenticate(request, admin)
+            response = self.dispatch(request, CartListView)
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.data["error"]["code"], "FORBIDDEN")
         service_mock.create_cart.assert_not_called()
 
     def test_cart_detail_get_not_found_returns_error(self):
@@ -304,6 +355,22 @@ class CartViewsUnitTests(unittest.TestCase):
             response = self.dispatch(request, CartDetailView, cart_id=1)
         self.assertEqual(response.status_code, 409)
         self.assertEqual(response.data["error"]["code"], "CONFLICT")
+
+    def test_cart_detail_patch_forbidden_when_reassigning_to_staff(self):
+        service_mock = Mock()
+        service_mock.patch_operations.side_effect = CartNotAllowedError(
+            "Target user is not a customer"
+        )
+        admin = types.SimpleNamespace(
+            id=1, is_authenticated=True, is_staff=True, is_superuser=False
+        )
+        payload = {"userId": 7}
+        with patch.object(CartDetailView, "service", service_mock):
+            request = self.factory.patch("/api/carts/1/", payload, format="json")
+            self.authenticate(request, admin)
+            response = self.dispatch(request, CartDetailView, cart_id=1)
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.data["error"]["code"], "FORBIDDEN")
 
     def test_cart_detail_patch_forbidden_reassign_by_non_admin(self):
         service_mock = Mock()

@@ -19,6 +19,7 @@ from .protocols import (
     CartRepositoryProtocol,
     ProductRepositoryProtocol,
 )
+from apps.users.models import User
 
 logger = get_logger(__name__).bind(component="carts", layer="service")
 
@@ -26,6 +27,9 @@ logger = get_logger(__name__).bind(component="carts", layer="service")
 class CartAlreadyExistsError(Exception):
     """Raised when attempting to create more than one cart for a user."""
 
+
+class CartNotAllowedError(Exception):
+    """Raised when trying to assign a cart to a non-customer account."""
 
 
 class CartService:
@@ -60,6 +64,21 @@ class CartService:
 
     def create_cart(self, user_id: int, data: Dict[str, Any]):
         self.logger.info("Creating cart", user_id=user_id)
+        user_info = (
+            User.objects.filter(id=user_id)
+            .values("id", "is_staff", "is_superuser")
+            .first()
+        )
+        if not user_info:
+            self.logger.warning("Cart creation failed: user missing", user_id=user_id)
+            raise CartNotAllowedError(f"User {user_id} does not exist")
+        if user_info["is_staff"] or user_info["is_superuser"]:
+            self.logger.warning(
+                "Cart creation rejected for non-customer account", user_id=user_id
+            )
+            raise CartNotAllowedError(
+                "Staff and admin accounts cannot own carts"
+            )
         if self.carts.get(user_id=user_id):
             self.logger.warning(
                 "Cart creation rejected: user already has cart", user_id=user_id
@@ -122,6 +141,28 @@ class CartService:
             "user_id": command.user_id,
             "date": command.date,
         }
+        if command.user_id is not None and command.user_id != cart.user_id:
+            user_info = (
+                User.objects.filter(id=command.user_id)
+                .values("id", "is_staff", "is_superuser")
+                .first()
+            )
+            if not user_info:
+                self.logger.warning(
+                    "Cart update rejected: reassignment target missing",
+                    cart_id=cart_id,
+                    target_user=command.user_id,
+                )
+                raise CartNotAllowedError("Target user does not exist")
+            if user_info["is_staff"] or user_info["is_superuser"]:
+                self.logger.warning(
+                    "Cart update rejected: target user is not a customer",
+                    cart_id=cart_id,
+                    target_user=command.user_id,
+                )
+                raise CartNotAllowedError(
+                    "Staff and admin accounts cannot own carts"
+                )
         if (
             command.user_id is not None
             and command.user_id != cart.user_id
@@ -187,15 +228,29 @@ class CartService:
             for cart_product in self.cart_products.list_for_cart(cart.id):
                 self.cart_products.delete(cart_product)
             self.carts.delete(cart)
+            recreate_user_id: Optional[int] = None
             if owner_id is not None:
+                user_info = (
+                    User.objects.filter(id=owner_id)
+                    .values("id", "is_staff", "is_superuser")
+                    .first()
+                )
+                if user_info and not (
+                    user_info["is_staff"] or user_info["is_superuser"]
+                ):
+                    recreate_user_id = owner_id
+            if recreate_user_id is not None:
                 self.logger.debug(
-                    "Recreating empty cart after deletion", user_id=owner_id
+                    "Recreating empty cart after deletion", user_id=recreate_user_id
                 )
                 try:
-                    self.carts.create(user_id=owner_id, date=timezone.now().date())
+                    self.carts.create(
+                        user_id=recreate_user_id, date=timezone.now().date()
+                    )
                 except Exception:
                     self.logger.warning(
-                        "Failed to recreate cart after deletion", user_id=owner_id
+                        "Failed to recreate cart after deletion",
+                        user_id=recreate_user_id,
                     )
         self.logger.info("Cart deleted", cart_id=cart_id, user_id=user_id)
         return True
@@ -253,6 +308,22 @@ class CartService:
             except (ValueError, TypeError):
                 target_user_id = None
             if target_user_id and target_user_id != cart.user_id:
+                user_info = (
+                    User.objects.filter(id=target_user_id)
+                    .values("id", "is_staff", "is_superuser")
+                    .first()
+                )
+                if not user_info:
+                    raise CartNotAllowedError("Target user does not exist")
+                if user_info["is_staff"] or user_info["is_superuser"]:
+                    self.logger.warning(
+                        "Cart reassignment rejected: target user is not a customer",
+                        cart_id=cart.id,
+                        new_user_id=target_user_id,
+                    )
+                    raise CartNotAllowedError(
+                        "Staff and admin accounts cannot own carts"
+                    )
                 if self.carts.get(user_id=target_user_id):
                     self.logger.warning(
                         "Cart reassignment rejected: target user already has a cart",

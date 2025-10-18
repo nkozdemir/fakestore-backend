@@ -38,18 +38,18 @@ Base path: `/api/`
 Authentication & Permissions
 - JWT is required for write operations on most resources. Some read endpoints now require ownership or staff access.
 - Auth endpoints:
-  - Public: `GET /api/auth/validate-username?username=<value>`, `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/refresh`
+  - Public: `GET /api/auth/validate-username?username=<value>`, `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/login/staff`, `POST /api/auth/refresh`
   - Auth required: `GET /api/auth/me`, `POST /api/auth/logout`, `POST /api/auth/logout-all`
 - Username availability is determined via `GET /api/auth/validate-username/?username=<value>` and returns `{ "username": "...", "available": true/false }`.
 - Products & Categories: Public GETs; POST/PUT/PATCH/DELETE require auth
 - Users: Auth required for all endpoints; only staff/superusers may create users or list all users.
-- Carts: Auth required for all endpoints; cart reads are limited to the owner unless staff/superuser. Every user automatically receives an empty cart and may only possess a single cart.
+- Carts: Auth required for all endpoints; cart reads are limited to the owner unless staff/superuser. Every customer automatically receives an empty cart and may only possess a single cart. Staff and admin accounts cannot own carts or mutate cart contents as customers.
 - Special cases:
-  - Product ratings: `GET /api/products/<id>/rating/` exposes the caller's summary (staff can target other users via `userId`); `GET /api/products/<id>/ratings/` is public and lists every rating with `id`, value, and optional first/last name metadata; `POST`/`DELETE` require auth and staff can override the target user via `userId`
+  - Product ratings: `GET /api/products/<id>/rating/` exposes the caller's summary; `GET /api/products/<id>/ratings/` is public and lists every rating with `id`, value, and optional first/last name metadata; only non-staff users may `POST`/`DELETE` ratings.
   - `GET /api/users/<id>/`: Auth required; user must match the path or be staff/superuser
   - Cart GET endpoints: Auth required; list requires staff/superuser, detail/user views require the owner or staff/superuser
 
-Attach a JWT access token for protected routes using the `Authorization: Bearer <token>` header.
+Attach a JWT access token for protected routes using the `Authorization: Bearer <token>` header (issue tokens via the appropriate login endpoint for customers vs. staff/admins).
 
 ### Products
 - Public: `GET /api/products/` (optional `?category=electronics`)
@@ -59,10 +59,10 @@ Attach a JWT access token for protected routes using the `Authorization: Bearer 
 - Auth required: `PATCH /api/products/<id>/`
 - Auth required: `DELETE /api/products/<id>/`
 - Ratings:
-  - Public: `GET /api/products/<id>/rating/` (returns the caller’s summary; staff/superusers may supply `?userId=` to inspect another user’s rating)
+  - Public: `GET /api/products/<id>/rating/` (returns the caller’s summary)
   - Public: `GET /api/products/<id>/ratings/` (list every rating, exposing the rating `id`, value, and optional first/last name)
-  - Auth required: `POST /api/products/<id>/rating/` (set/update user rating; staff/superusers may supply `?userId=` to rate on behalf of another user)
-  - Auth required: `DELETE /api/products/<id>/rating/?ratingId=<rating>` (remove a specific rating; non-privileged callers may only delete their own)
+  - Auth required (customers only): `POST /api/products/<id>/rating/` (set/update user rating)
+  - Auth required (customers only): `DELETE /api/products/<id>/rating/?ratingId=<rating>` (remove a specific rating; non-privileged callers may only delete their own)
 
 Body (create/update example) (omit `id`; it will be generated):
 ```json

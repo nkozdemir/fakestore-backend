@@ -1,7 +1,11 @@
 import unittest
 from unittest.mock import patch
 
-from apps.carts.services import CartService, CartAlreadyExistsError
+from apps.carts.services import (
+    CartService,
+    CartAlreadyExistsError,
+    CartNotAllowedError,
+)
 from apps.carts.mappers import CartMapper, CartProductMapper
 from apps.catalog.mappers import ProductMapper
 
@@ -180,6 +184,39 @@ class CartServiceUnitTests(unittest.TestCase):
             "apps.carts.services.transaction.atomic", DummyAtomic()
         )
         self.atomic_patcher.start()
+        self.user_flags = {}
+
+        self.user_model_patcher = patch("apps.carts.services.User")
+        self.mock_user_model = self.user_model_patcher.start()
+
+        def filter_side_effect(**filters):
+            user_id = filters.get("id")
+
+            class ValuesWrapper:
+                def __init__(self, info):
+                    self._info = info
+
+                def values(self, *args):
+                    info = self._info
+
+                    class FirstWrapper:
+                        def __init__(self, info):
+                            self._info = info
+
+                        def first(self_inner):
+                            return info
+
+                    return FirstWrapper(info)
+
+            if user_id is None:
+                return ValuesWrapper(None)
+            info = self.user_flags.get(
+                user_id, {"id": user_id, "is_staff": False, "is_superuser": False}
+            )
+            return ValuesWrapper(info)
+
+        self.mock_user_model.objects.filter.side_effect = filter_side_effect
+
         self.service = CartService(
             carts=self.cart_repo,
             cart_products=self.cart_products_repo,
@@ -189,6 +226,7 @@ class CartServiceUnitTests(unittest.TestCase):
 
     def tearDown(self):
         self.atomic_patcher.stop()
+        self.user_model_patcher.stop()
 
     def test_create_and_get_cart(self):
         dto = self.service.create_cart(
@@ -207,6 +245,11 @@ class CartServiceUnitTests(unittest.TestCase):
         self.service.create_cart(4, {"products": []})
         with self.assertRaises(CartAlreadyExistsError):
             self.service.create_cart(4, {"products": []})
+
+    def test_create_cart_rejects_staff_user(self):
+        self.user_flags[20] = {"id": 20, "is_staff": True, "is_superuser": False}
+        with self.assertRaises(CartNotAllowedError):
+            self.service.create_cart(20, {"products": []})
 
     def test_update_cart_replace_items(self):
         dto = self.service.create_cart(
@@ -238,6 +281,12 @@ class CartServiceUnitTests(unittest.TestCase):
         self.assertEqual(len(updated.items), 1)
         self.assertEqual(updated.items[0].product.id, 1)
         self.assertEqual(updated.items[0].quantity, 2)
+
+    def test_update_cart_reassign_to_staff_rejected(self):
+        dto = self.service.create_cart(13, {"products": []})
+        self.user_flags[14] = {"id": 14, "is_staff": True, "is_superuser": False}
+        with self.assertRaises(CartNotAllowedError):
+            self.service.update_cart(dto.id, {"user_id": 14})
 
     def test_update_cart_reverts_on_error(self):
         dto = self.service.create_cart(
@@ -313,6 +362,14 @@ class CartServiceUnitTests(unittest.TestCase):
         self.assertIsNotNone(replacement)
         self.assertNotEqual(replacement.id, dto.id)
         self.assertEqual(replacement._items, [])
+
+    def test_delete_cart_for_staff_does_not_recreate(self):
+        # Manually seed a cart for a staff user to simulate legacy data
+        self.user_flags[40] = {"id": 40, "is_staff": True, "is_superuser": False}
+        staff_cart = self.cart_repo.create(user_id=40, date=None)
+        result = self.service.delete_cart(staff_cart.id)
+        self.assertTrue(result)
+        self.assertIsNone(self.cart_repo.get(user_id=40))
 
 
 if __name__ == "__main__":

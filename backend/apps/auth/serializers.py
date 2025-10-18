@@ -1,4 +1,6 @@
 from rest_framework import serializers
+from rest_framework.exceptions import ValidationError
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from apps.users.validators import (
     validate_password as validate_password_rules,
@@ -48,6 +50,7 @@ class MeResponseSerializer(serializers.Serializer):
     first_name = serializers.CharField(allow_blank=True)
     last_name = serializers.CharField(allow_blank=True)
     last_login = serializers.DateTimeField(allow_null=True)
+    date_joined = serializers.DateTimeField()
     is_staff = serializers.BooleanField()
     is_superuser = serializers.BooleanField()
 
@@ -58,3 +61,30 @@ class LogoutRequestSerializer(serializers.Serializer):
 
 class DetailResponseSerializer(serializers.Serializer):
     detail = serializers.CharField()
+
+
+class CustomerTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """Token serializer that blocks staff/admin accounts."""
+
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        if getattr(self.user, "is_staff", False) or getattr(
+            self.user, "is_superuser", False
+        ):
+            raise ValidationError(
+                "Staff and admin accounts must use the staff login endpoint."
+            )
+        return data
+
+
+class StaffTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """Token serializer that only allows staff or superusers."""
+
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        if not (
+            getattr(self.user, "is_staff", False)
+            or getattr(self.user, "is_superuser", False)
+        ):
+            raise ValidationError("Only staff or admin accounts may use this endpoint.")
+        return data

@@ -1,6 +1,6 @@
 from django.db import migrations, models
 import django.db.models.deletion
-import datetime
+from django.utils import timezone
 
 
 def ensure_single_cart(apps, schema_editor):
@@ -10,6 +10,11 @@ def ensure_single_cart(apps, schema_editor):
 
     for user in User.objects.all():
         carts = list(Cart.objects.filter(user_id=user.id).order_by("id"))
+        if user.is_staff or user.is_superuser:
+            for extra in carts:
+                CartProduct.objects.filter(cart_id=extra.id).delete()
+                extra.delete()
+            continue
         if carts:
             keeper = carts[0]
             # Drop any additional carts and their products
@@ -17,7 +22,7 @@ def ensure_single_cart(apps, schema_editor):
                 CartProduct.objects.filter(cart_id=extra.id).delete()
                 extra.delete()
         else:
-            Cart.objects.create(user_id=user.id, date=datetime.date.today())
+            Cart.objects.create(user_id=user.id, date=timezone.now().date())
 
 
 class Migration(migrations.Migration):
