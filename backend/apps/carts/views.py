@@ -30,7 +30,6 @@ class CartPatchSerializer(serializers.Serializer):
     userId = serializers.IntegerField(required=False)
 
 
-@extend_schema(tags=["Carts"])
 class CartListView(APIView):
     permission_classes = [IsAuthenticated]
     service = build_cart_service()
@@ -51,18 +50,8 @@ class CartListView(APIView):
     def get(self, request):
         is_privileged = bool(getattr(request, "is_privileged_user", False))
         actor_id = getattr(request, "validated_user_id", None)
-        if not is_privileged:
-            self.log.warning(
-                "Cart list forbidden",
-                actor_id=actor_id,
-            )
-            return error_response(
-                "FORBIDDEN", "You do not have permission to list carts"
-            )
         # Support both userId (camelCase) and user_id (snake_case)
-        user_id_param = request.query_params.get("userId") or request.query_params.get(
-            "user_id"
-        )
+        user_id_param = request.query_params.get("userId") or request.query_params.get("user_id")
         user_id: Optional[int] = None
         if user_id_param is not None:
             try:
@@ -78,12 +67,66 @@ class CartListView(APIView):
                     "userId must be an integer",
                     {"userId": user_id_param},
                 )
-        self.log.debug("Listing carts via API", user_id=user_id)
-        data = (
-            self.service.list_carts(user_id=user_id)
-            if user_id is not None
-            else self.service.list_carts()
-        )
+        if user_id is not None:
+            # Privileged callers can fetch cart lists for any user.
+            if is_privileged:
+                self.log.debug("Listing carts via API", user_id=user_id)
+                data = self.service.list_carts(user_id=user_id)
+                serializer = CartReadSerializer(data, many=True)
+                return Response(serializer.data)
+            # Non-privileged callers may only fetch their own cart.
+            if actor_id is None:
+                self.log.warning("Unauthorized cart lookup", requested_user_id=user_id_param)
+                return error_response("UNAUTHORIZED", "Authentication required")
+            if int(actor_id) != user_id:
+                self.log.warning(
+                    "Cart lookup forbidden for other user",
+                    actor_id=actor_id,
+                    requested_user_id=user_id,
+                )
+                return error_response(
+                    "FORBIDDEN",
+                    "You do not have permission to view this user's carts",
+                    {"userId": user_id_param},
+                )
+            try:
+                dto, _created = self.service.get_or_create_cart(user_id)
+            except CartNotAllowedError as exc:
+                self.log.warning(
+                    "Cart access not allowed for user",
+                    actor_id=actor_id,
+                    target_user_id=user_id,
+                    error=str(exc),
+                )
+                code = "NOT_FOUND" if "does not exist" in str(exc) else "FORBIDDEN"
+                message = (
+                    "Target user not found"
+                    if code == "NOT_FOUND"
+                    else "Staff and admin accounts cannot own carts"
+                )
+                return error_response(code, message, {"userId": user_id_param})
+            except CartAlreadyExistsError:
+                dto = self.service.get_cart_for_user(user_id)
+            payload = [dto] if dto else []
+            serializer = CartReadSerializer(payload, many=True)
+            self.log.debug(
+                "Returning cart for user via query lookup",
+                actor_id=actor_id,
+                user_id=user_id,
+                has_cart=bool(dto),
+            )
+            return Response(serializer.data)
+
+        if not is_privileged:
+            self.log.warning(
+                "Cart list forbidden",
+                actor_id=actor_id,
+            )
+            return error_response(
+                "FORBIDDEN", "You do not have permission to list carts"
+            )
+        self.log.debug("Listing carts via API without filter")
+        data = self.service.list_carts()
         serializer = CartReadSerializer(data, many=True)
         return Response(serializer.data)
 
@@ -174,36 +217,9 @@ class CartListView(APIView):
                 "Staff and admin accounts cannot own carts",
                 {"userId": str(target_user_id)},
             )
-        existing = self.service.get_cart_for_user(int(target_user_id))
-        if existing:
-            self.log.warning(
-                "Cart creation conflict",
-                actor_id=user_id,
-                target_user_id=target_user_id,
-            )
-            return error_response(
-                "CONFLICT",
-                "User already has a cart",
-                {"userId": str(target_user_id)},
-            )
-        self.log.info(
-            "Creating cart via API",
-            user_id=target_user_id,
-            actor_id=user_id,
-            privileged=is_privileged,
-        )
         try:
-            dto = self.service.create_cart(int(target_user_id), payload)
-        except CartAlreadyExistsError:
-            self.log.warning(
-                "Cart creation conflict (race)",
-                actor_id=user_id,
-                target_user_id=target_user_id,
-            )
-            return error_response(
-                "CONFLICT",
-                "User already has a cart",
-                {"userId": str(target_user_id)},
+            dto, created = self.service.get_or_create_cart(
+                int(target_user_id), payload
             )
         except CartNotAllowedError as exc:
             self.log.warning(
@@ -223,19 +239,31 @@ class CartListView(APIView):
                 message,
                 {"userId": str(target_user_id)},
             )
+        except CartAlreadyExistsError:
+            # Should be rare since get_or_create guards, but guard against unexpected cases.
+            self.log.warning(
+                "Cart creation conflict (race)",
+                actor_id=user_id,
+                target_user_id=target_user_id,
+            )
+            return error_response(
+                "CONFLICT",
+                "User already has a cart",
+                {"userId": str(target_user_id)},
+            )
         cart_id = getattr(dto, "id", None)
         if cart_id is None and isinstance(dto, dict):
             cart_id = dto.get("id")
         self.log.info(
-            "Cart created via API",
+            "Cart ensured via API",
             cart_id=cart_id,
             user_id=target_user_id,
             actor_id=user_id,
+            created=created,
+            privileged=is_privileged,
         )
-        return Response(CartReadSerializer(dto).data, status=status.HTTP_201_CREATED)
-
-
-@extend_schema(tags=["Carts"])
+        response_status = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+        return Response(CartReadSerializer(dto).data, status=response_status)
 class CartDetailView(APIView):
     permission_classes = [IsAuthenticated]
     service = build_cart_service()
@@ -496,39 +524,3 @@ class CartDetailView(APIView):
             )
             return error_response("NOT_FOUND", "Cart not found", {"id": str(cart_id)})
         return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-@extend_schema(tags=["Carts"])
-class CartByUserView(APIView):
-    permission_classes = [IsAuthenticated]
-    service = build_cart_service()
-    log = logger.bind(view="CartByUserView")
-
-    @extend_schema(
-        summary="List carts by user",
-        parameters=[OpenApiParameter("user_id", int, OpenApiParameter.PATH)],
-        responses={200: CartReadSerializer(many=True)},
-    )
-    def get(self, request, user_id: int):
-        actor_id = getattr(request, "validated_user_id", None)
-        is_privileged = bool(getattr(request, "is_privileged_user", False))
-        if actor_id is None and not is_privileged:
-            self.log.warning(
-                "Unauthorized cart-by-user access attempt",
-                target_user_id=user_id,
-            )
-            return error_response("UNAUTHORIZED", "Authentication required")
-        if not is_privileged and actor_id != int(user_id):
-            self.log.warning(
-                "Cart-by-user forbidden",
-                actor_id=actor_id,
-                target_user_id=user_id,
-            )
-            return error_response(
-                "FORBIDDEN",
-                "You do not have permission to view this user's carts",
-            )
-        self.log.debug("Listing carts for user", user_id=user_id)
-        data = self.service.list_carts(user_id=user_id)
-        serializer = CartReadSerializer(data, many=True)
-        return Response(serializer.data)

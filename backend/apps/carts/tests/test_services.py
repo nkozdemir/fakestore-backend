@@ -251,6 +251,45 @@ class CartServiceUnitTests(unittest.TestCase):
         with self.assertRaises(CartNotAllowedError):
             self.service.create_cart(20, {"products": []})
 
+    def test_get_or_create_cart_returns_existing(self):
+        dto = self.service.create_cart(30, {"products": []})
+        fetched, created = self.service.get_or_create_cart(30)
+        self.assertFalse(created)
+        self.assertEqual(fetched.id, dto.id)
+
+    def test_get_or_create_cart_creates_when_missing(self):
+        dto, created = self.service.get_or_create_cart(
+            31, {"products": [{"product_id": 1, "quantity": 1}]}
+        )
+        self.assertTrue(created)
+        cart = self.cart_repo.get(id=dto.id)
+        self.assertIsNotNone(cart)
+        self.assertEqual(cart.user_id, 31)
+        self.assertEqual(len(cart._items), 1)
+
+    def test_get_or_create_cart_handles_race_condition(self):
+        # Preload repo to simulate concurrent creation after initial check
+        call_count = {"value": 0}
+
+        original_create = self.cart_repo.create
+
+        def race_create(**data):
+            if call_count["value"] == 0:
+                call_count["value"] += 1
+                # Simulate another request creating the cart just before this one.
+                original_create(user_id=data["user_id"], date=data.get("date"))
+                raise ValueError("Cart already exists for user")
+            return original_create(**data)
+
+        self.cart_repo.create = race_create
+        try:
+            dto, created = self.service.get_or_create_cart(32, {"products": []})
+        finally:
+            self.cart_repo.create = original_create
+        self.assertFalse(created)
+        self.assertIsNotNone(dto)
+        self.assertEqual(dto.user_id, 32)
+
     def test_update_cart_replace_items(self):
         dto = self.service.create_cart(
             6,

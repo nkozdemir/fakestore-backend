@@ -1,7 +1,6 @@
 from django.core.management.base import BaseCommand
 from django.db import transaction, connection
 from django.core.management.color import no_style
-from django.utils import timezone
 from apps.catalog.models import Category, Product, ProductCategory
 from apps.users.models import User, Address
 from apps.carts.models import Cart, CartProduct
@@ -436,17 +435,9 @@ class Command(BaseCommand):
                 longitude=lon,
             )
 
-        self.stdout.write("Ensuring empty carts for all users...")
+        self.stdout.write("Clearing carts...")
         CartProduct.objects.all().delete()
-        today = timezone.now().date()
-        for user in User.objects.all():
-            if user.is_staff or user.is_superuser:
-                Cart.objects.filter(user=user).delete()
-                continue
-            Cart.objects.update_or_create(
-                user=user,
-                defaults={"date": today},
-            )
+        Cart.objects.all().delete()
 
         # After inserting explicit IDs, reset sequences for these models so future
         # inserts use the next available ID (prevents duplicate key IntegrityError).

@@ -43,11 +43,11 @@ Authentication & Permissions
 - Username availability is determined via `GET /api/auth/validate-username/?username=<value>` and returns `{ "username": "...", "available": true/false }`.
 - Products & Categories: Public GETs; POST/PUT/PATCH/DELETE require auth
 - Users: Auth required for all endpoints; only staff/superusers may create users or list all users.
-- Carts: Auth required for all endpoints; cart reads are limited to the owner unless staff/superuser. Every customer automatically receives an empty cart and may only possess a single cart. Staff and admin accounts cannot own carts or mutate cart contents as customers.
+- Carts: Auth required for all endpoints; cart reads are limited to the owner unless staff/superuser. Customers may only possess a single cart, which is created on demand when they access or modify it. Staff and admin accounts cannot own carts or mutate cart contents as customers.
 - Special cases:
   - Product ratings: `GET /api/products/<id>/rating/` exposes the caller's summary; `GET /api/products/<id>/ratings/` is public and lists every rating with `id`, value, and optional first/last name metadata; only non-staff users may `POST`/`DELETE` ratings.
   - `GET /api/users/<id>/`: Auth required; user must match the path or be staff/superuser
-  - Cart GET endpoints: Auth required; list requires staff/superuser, detail/user views require the owner or staff/superuser
+  - Cart GET endpoints: Auth required; staff/superusers may list all carts, while customers use `GET /api/carts/?userId=<self>` (auto-creates if needed). `GET /api/carts/<id>/` still requires the owner or staff/superuser.
 
 Attach a JWT access token for protected routes using the `Authorization: Bearer <token>` header (issue tokens via the appropriate login endpoint for customers vs. staff/admins).
 
@@ -107,7 +107,7 @@ Pagination (Products list):
 
 ### Carts
 - Auth required (staff/superuser): `GET /api/carts/` (optional `?userId=1`)
-- Auth required (self or staff/superuser): `GET /api/carts/users/<user_id>/` (list carts for a specific user)
+- Auth required (self): `GET /api/carts/?userId=<your_id>` *(auto-creates an empty cart if none exists)*
 - Auth required: `POST /api/carts/` *(returns 409 if the user already has a cart)*
 - Auth required (self or staff/superuser): `GET /api/carts/<id>/`
 - Auth required: `PUT /api/carts/<id>/`
@@ -252,5 +252,5 @@ Notes:
 - Tests authenticate via JWT where needed (using the login endpoint and attaching the `Authorization: Bearer <token>` header).
 
 ## Notes
-- Unified seeding command: `python manage.py seed_fakestore [--flush]` loads the full dataset (products, users, addresses) and ensures each user has an empty cart.
+- Unified seeding command: `python manage.py seed_fakestore [--flush]` loads the full dataset (products, users, addresses) and clears all carts so they can be created on demand.
 - Error codes are centralized in `apps/api/utils.py` (`error_response`). Add new codes there.

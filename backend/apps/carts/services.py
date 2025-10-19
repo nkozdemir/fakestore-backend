@@ -55,6 +55,42 @@ class CartService:
         cart = self.carts.get(user_id=user_id)
         return self.cart_mapper.to_dto(cart) if cart else None
 
+    def get_or_create_cart(
+        self, user_id: int, data: Optional[Dict[str, Any]] = None
+    ):
+        """
+        Fetch the cart for the given user or create it atomically if it does not exist.
+        Returns a tuple of (cart_dto, created_flag).
+        """
+        self.logger.debug("Ensuring cart exists", user_id=user_id)
+        existing = self.carts.get(user_id=user_id)
+        if existing:
+            self.logger.debug("Cart already present", user_id=user_id, cart_id=existing.id)
+            return self.cart_mapper.to_dto(existing), False
+        payload = data if data is not None else {}
+        try:
+            dto = self.create_cart(user_id, payload)
+            cart_id = getattr(dto, "id", None)
+            if cart_id is None and isinstance(dto, dict):
+                cart_id = dto.get("id")
+            self.logger.info(
+                "Cart created via get_or_create",
+                user_id=user_id,
+                cart_id=cart_id,
+            )
+            return dto, True
+        except CartAlreadyExistsError:
+            # A concurrent request may have created the cart after our initial check.
+            existing = self.carts.get(user_id=user_id)
+            if existing:
+                self.logger.debug(
+                    "Cart created by concurrent request",
+                    user_id=user_id,
+                    cart_id=existing.id,
+                )
+                return self.cart_mapper.to_dto(existing), False
+            raise
+
     def get_cart(self, cart_id: int):
         self.logger.debug("Fetching cart", cart_id=cart_id)
         cart = self.carts.get(id=cart_id)

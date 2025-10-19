@@ -1,5 +1,4 @@
 import unittest
-from unittest.mock import patch
 
 from apps.auth.services import RegistrationService
 
@@ -35,9 +34,6 @@ class RegistrationServiceTests(unittest.TestCase):
     def setUp(self):
         self.repo = FakeUserRepository()
         self.service = RegistrationService(users=self.repo)
-        self.cart_patcher = patch("apps.auth.services.ensure_user_cart")
-        self.mock_ensure_cart = self.cart_patcher.start()
-        self.mock_ensure_cart.reset_mock()
 
     def test_register_success(self):
         result = self.service.register(
@@ -52,7 +48,6 @@ class RegistrationServiceTests(unittest.TestCase):
         self.assertEqual(result["username"], "user")
         self.assertEqual(result["email"], "user@example.com")
         self.assertEqual(result["id"], 1)
-        self.mock_ensure_cart.assert_called_once()
 
     def test_register_duplicate_username(self):
         self.repo._existing_usernames.add("dup")
@@ -66,17 +61,12 @@ class RegistrationServiceTests(unittest.TestCase):
             }
         )
         self.assertEqual(result[0], "VALIDATION_ERROR")
-        self.mock_ensure_cart.assert_not_called()
 
     def test_is_username_available_checks_repository(self):
         self.repo._existing_usernames.add("taken")
         self.assertFalse(self.service.is_username_available("taken"))
         self.assertFalse(self.service.is_username_available(" taken "))
         self.assertTrue(self.service.is_username_available("free"))
-
-    def tearDown(self):
-        self.cart_patcher.stop()
-
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

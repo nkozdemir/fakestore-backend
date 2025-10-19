@@ -160,13 +160,11 @@ def validate_request_context(request: HttpRequest, view_class, view_kwargs) -> A
                 logger.warning("CartListView GET requires authentication")
                 return error_response("UNAUTHORIZED", "Authentication required")
             _set_validated_user(request, int(request.user.id))
-            if not _is_privileged_user(request.user):
-                logger.warning(
-                    "CartListView GET forbidden", user_id=request.user.id
-                )
-                return error_response(
-                    "FORBIDDEN", "You do not have permission to list carts"
-                )
+            logger.debug(
+                "Validated cart list user",
+                user_id=request.user.id,
+                privileged=_is_privileged_user(request.user),
+            )
         if request.method in ("POST",):
             if not _is_authenticated_user(request):
                 logger.warning("CartListView POST requires authentication")

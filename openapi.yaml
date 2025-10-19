@@ -228,16 +228,17 @@ paths:
     get:
       operationId: carts_list
       summary: List carts
-      description: Requires staff or superuser privileges. Non-privileged callers receive 403.
+      description: Staff or superusers can list carts or filter by user. Regular customers must supply their own userId to fetch their cart; if a cart does not exist, one is created automatically.
       parameters:
       - in: query
         name: userId
         schema:
           type: integer
-        description: Filter by user ID (preferred)
+        description: Target user ID. Required for non-privileged callers; when the caller is the user, the cart is created on demand if missing.
       tags:
       - Carts
       x-roles-allowed:
+      - user
       - staff
       - admin
       security:
@@ -250,6 +251,18 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/CartRead'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
           description: ''
     post:
       operationId: carts_create
@@ -470,46 +483,6 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
         '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: ''
-  /api/carts/users/{user_id}/:
-    get:
-      operationId: carts_users_list
-      summary: List carts by user
-      description: Requires authentication; the caller must be that user or a staff/superuser.
-      parameters:
-      - in: path
-        name: user_id
-        schema:
-          type: integer
-        required: true
-      tags:
-      - Carts
-      x-roles-allowed:
-      - user
-      - staff
-      - admin
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/CartRead'
-          description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: ''
-        '403':
           content:
             application/json:
               schema:

@@ -5,7 +5,6 @@ from typing import Dict, Any, Optional
 from django.contrib.auth.hashers import make_password
 
 from apps.common import get_logger
-from apps.carts.utils import ensure_user_cart
 from .protocols import UserRegistrationRepositoryProtocol
 
 logger = get_logger(__name__).bind(component="auth", service="RegistrationService")
@@ -53,7 +52,6 @@ class RegistrationService:
         payload = self._build_payload(data)
         password = payload.pop("password")
         user = self.users.create_user(password=password, **payload)
-        ensure_user_cart(user)
         self.logger.info(
             "User registered successfully", user_id=user.id, username=user.username
         )
