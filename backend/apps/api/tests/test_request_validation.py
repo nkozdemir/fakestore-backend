@@ -126,6 +126,9 @@ def test_validate_request_user_put_duplicate_email(mock_user_manager):
         True
     )
     request = factory.put("/api/users/2/", {"email": "dup@example.com"}, format="json")
+    request.user = types.SimpleNamespace(
+        id=2, is_authenticated=True, is_staff=False, is_superuser=False
+    )
     response = validate_request_context(request, UserDetailView, {"user_id": 2})
     assert response.status_code == 400
     assert response.data["error"]["code"] == "VALIDATION_ERROR"

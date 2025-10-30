@@ -20,36 +20,6 @@ from .mappers import ProductMapper
 logger = get_logger(__name__).bind(component="catalog", layer="view")
 
 
-def _ensure_admin_privileged(log, request, action: str, resource: str):
-    user = getattr(request, "user", None)
-    if not user or not getattr(user, "is_authenticated", False):
-        log.warning(
-            "Unauthorized action attempt",
-            resource=resource,
-            action=action,
-        )
-        return error_response("UNAUTHORIZED", "Authentication required")
-    if not (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)):
-        log.warning(
-            "Forbidden action",
-            resource=resource,
-            action=action,
-            user_id=getattr(user, "id", None),
-        )
-        return error_response(
-            "FORBIDDEN", f"You do not have permission to manage {resource}"
-        )
-    return None
-
-
-def _ensure_category_privileged(log, request, action: str):
-    return _ensure_admin_privileged(log, request, action, "categories")
-
-
-def _ensure_product_privileged(log, request, action: str):
-    return _ensure_admin_privileged(log, request, action, "products")
-
-
 @extend_schema(tags=["Catalog"])
 class ProductListView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
@@ -73,12 +43,13 @@ class ProductListView(APIView):
     def get(self, request):
         category = request.query_params.get("category")
         self.log.debug("Handling product list request", category=category)
-        queryset = self.service.products_queryset(category=category)
-        paginator = ProductListPagination()
-        page = paginator.paginate_queryset(queryset, request, view=self)
-        dtos = ProductMapper.many_to_dto(page)
-        serializer = ProductReadSerializer(dtos, many=True)
-        return paginator.get_paginated_response(serializer.data)
+        return self.service.list_products_paginated(
+            request,
+            category=category,
+            paginator_class=ProductListPagination,
+            serializer_class=ProductReadSerializer,
+            view=self,
+        )
 
     @extend_schema(
         summary="Create product",
@@ -89,9 +60,6 @@ class ProductListView(APIView):
         },
     )
     def post(self, request):
-        guard = _ensure_product_privileged(self.log, request, "create")
-        if guard:
-            return guard
         serializer = ProductWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.log.info(
@@ -141,9 +109,6 @@ class ProductDetailView(APIView):
         },
     )
     def put(self, request, product_id: int):
-        guard = _ensure_product_privileged(self.log, request, "replace")
-        if guard:
-            return guard
         serializer = ProductWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.log.info("Replacing product", product_id=product_id)
@@ -166,19 +131,17 @@ class ProductDetailView(APIView):
         },
     )
     def patch(self, request, product_id: int):
-        guard = _ensure_product_privileged(self.log, request, "patch")
-        if guard:
-            return guard
         self.log.info("Patching product", product_id=product_id)
-        dto_existing = self.service.get_product(product_id)
-        if not dto_existing:
-            self.log.info("Product not found for patch", product_id=product_id)
-            return Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)
         serializer = ProductWriteSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         dto = self.service.update_product(
             product_id, serializer.validated_data, partial=True
         )
+        if not dto:
+            self.log.info("Product patch failed: not found", product_id=product_id)
+            return error_response(
+                "NOT_FOUND", "Product not found", {"id": str(product_id)}
+            )
         return Response(ProductReadSerializer(dto).data)
 
     @extend_schema(
@@ -186,14 +149,11 @@ class ProductDetailView(APIView):
         responses={204: None, 404: OpenApiResponse(response=ErrorResponseSerializer)},
     )
     def delete(self, request, product_id: int):
-        guard = _ensure_product_privileged(self.log, request, "delete")
-        if guard:
-            return guard
         self.log.info("Deleting product", product_id=product_id)
-        deleted = self.service.delete_product(product_id)
-        if not deleted:
-            self.log.warning("Product delete failed: not found", product_id=product_id)
-            return Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+        deleted, error = self.service.delete_product_with_auth(product_id)
+        if error:
+            code, message, details = error
+            return error_response(code, message, details)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -220,13 +180,12 @@ class CategoryListView(APIView):
         },
     )
     def post(self, request):
-        guard = _ensure_category_privileged(self.log, request, "create")
-        if guard:
-            return guard
         serializer = CategorySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        self.log.info("Creating category", name=serializer.validated_data.get("name"))
-        dto = self.service.create_category(serializer.validated_data)
+        dto, error = self.service.create_category_with_auth(serializer.validated_data)
+        if error:
+            code, message, details = error
+            return error_response(code, message, details)
         category_id = getattr(dto, "id", None)
         if category_id is None and isinstance(dto, dict):
             category_id = dto.get("id")
@@ -268,20 +227,15 @@ class CategoryDetailView(APIView):
         },
     )
     def put(self, request, category_id: int):
-        guard = _ensure_category_privileged(self.log, request, "replace")
-        if guard:
-            return guard
         serializer = CategorySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.log.info("Replacing category", category_id=category_id)
-        dto = self.service.update_category(category_id, serializer.validated_data)
-        if not dto:
-            self.log.warning(
-                "Category replace failed: not found", category_id=category_id
-            )
-            return error_response(
-                "NOT_FOUND", "Category not found", {"id": str(category_id)}
-            )
+        dto, error = self.service.update_category_with_auth(
+            category_id, serializer.validated_data
+        )
+        if error:
+            code, message, details = error
+            return error_response(code, message, details)
         return Response(CategorySerializer(dto).data)
 
     @extend_schema(
@@ -294,20 +248,15 @@ class CategoryDetailView(APIView):
         },
     )
     def patch(self, request, category_id: int):
-        guard = _ensure_category_privileged(self.log, request, "patch")
-        if guard:
-            return guard
         serializer = CategorySerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         self.log.info("Patching category", category_id=category_id)
-        dto = self.service.update_category(category_id, serializer.validated_data)
-        if not dto:
-            self.log.warning(
-                "Category patch failed: not found", category_id=category_id
-            )
-            return error_response(
-                "NOT_FOUND", "Category not found", {"id": str(category_id)}
-            )
+        dto, error = self.service.update_category_with_auth(
+            category_id, serializer.validated_data
+        )
+        if error:
+            code, message, details = error
+            return error_response(code, message, details)
         return Response(CategorySerializer(dto).data)
 
     @extend_schema(
@@ -315,18 +264,11 @@ class CategoryDetailView(APIView):
         responses={204: None, 404: OpenApiResponse(response=ErrorResponseSerializer)},
     )
     def delete(self, request, category_id: int):
-        guard = _ensure_category_privileged(self.log, request, "delete")
-        if guard:
-            return guard
         self.log.info("Deleting category", category_id=category_id)
-        deleted = self.service.delete_category(category_id)
-        if not deleted:
-            self.log.warning(
-                "Category delete failed: not found", category_id=category_id
-            )
-            return error_response(
-                "NOT_FOUND", "Category not found", {"id": str(category_id)}
-            )
+        deleted, error = self.service.delete_category_with_auth(category_id)
+        if error:
+            code, message, details = error
+            return error_response(code, message, details)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -378,8 +320,21 @@ class ProductRatingView(APIView):
     service = build_product_service()
     log = logger.bind(view="ProductRatingView")
 
-    def _current_user_id(self, request):
-        return getattr(request, "rating_user_id", None)
+    def _context(self, request):
+        user = getattr(request, "user", None)
+        actor_id = getattr(request, "rating_actor_id", getattr(user, "id", None))
+        resolved_user_id = getattr(request, "rating_user_id", None)
+        target_user_id = getattr(
+            request, "rating_target_user_id", resolved_user_id
+        )
+        is_privileged = bool(getattr(request, "rating_is_privileged", False))
+        if not is_privileged:
+            is_privileged = bool(
+                getattr(request, "is_privileged_user", False)
+                or getattr(user, "is_staff", False)
+                or getattr(user, "is_superuser", False)
+            )
+        return actor_id, resolved_user_id, target_user_id, is_privileged
 
     @extend_schema(
         summary="Get rating summary",
@@ -402,48 +357,7 @@ class ProductRatingView(APIView):
         },
     )
     def get(self, request, product_id: int):
-        user_id = self._current_user_id(request)
-        user = getattr(request, "user", None)
-        actor_id = getattr(user, "id", None)
-        is_privileged = bool(
-            getattr(request, "is_privileged_user", False)
-            or getattr(user, "is_staff", False)
-            or getattr(user, "is_superuser", False)
-        )
-        target_user_id = user_id
-        raw_user_id = request.query_params.get("userId") or request.query_params.get(
-            "user_id"
-        )
-        if raw_user_id is not None:
-            try:
-                desired_user_id = int(raw_user_id)
-            except (TypeError, ValueError):
-                self.log.warning(
-                    "Invalid userId query parameter provided for rating summary",
-                    product_id=product_id,
-                    actor_id=actor_id,
-                    raw_value=raw_user_id,
-                )
-                return error_response(
-                    "VALIDATION_ERROR",
-                    "userId must be an integer",
-                    {"userId": raw_user_id},
-                )
-            if is_privileged:
-                target_user_id = desired_user_id
-            elif user_id is None or desired_user_id != user_id:
-                self.log.warning(
-                    "Rating summary forbidden for non-privileged override",
-                    product_id=product_id,
-                    actor_id=actor_id,
-                    requested_user_id=desired_user_id,
-                    resolved_user_id=user_id,
-                )
-                return error_response(
-                    "FORBIDDEN",
-                    "You do not have permission to view ratings for other users",
-                    {"userId": str(desired_user_id)},
-                )
+        actor_id, user_id, target_user_id, is_privileged = self._context(request)
         self.log.debug(
             "Fetching rating summary",
             product_id=product_id,
@@ -482,79 +396,18 @@ class ProductRatingView(APIView):
         },
     )
     def post(self, request, product_id: int):
-        user_id = self._current_user_id(request)
-        user = getattr(request, "user", None)
-        actor_id = getattr(user, "id", None)
-        is_staff = bool(getattr(user, "is_staff", False) or getattr(user, "is_superuser", False))
-        if is_staff and (user_id is None or user_id == actor_id):
+        actor_id, user_id, target_user_id, is_privileged = self._context(request)
+        value = getattr(request, "rating_value", None)
+        if value is None:
             self.log.warning(
-                "Staff/admin attempted to rate own account",
-                product_id=product_id,
-                actor_id=actor_id,
-            )
-            return error_response(
-                "FORBIDDEN", "Staff and admin accounts cannot rate products for themselves"
-            )
-        is_privileged = bool(
-            getattr(request, "is_privileged_user", False)
-            or getattr(user, "is_staff", False)
-            or getattr(user, "is_superuser", False)
-        )
-        target_user_id = user_id
-        raw_user_id = request.query_params.get("userId") or request.query_params.get(
-            "user_id"
-        )
-        if raw_user_id is not None:
-            try:
-                desired_user_id = int(raw_user_id)
-            except (TypeError, ValueError):
-                self.log.warning(
-                    "Invalid userId query parameter provided for rating",
-                    product_id=product_id,
-                    actor_id=actor_id,
-                    raw_value=raw_user_id,
-                )
-                return error_response(
-                    "VALIDATION_ERROR",
-                    "userId must be an integer",
-                    {"userId": raw_user_id},
-                )
-            if is_privileged:
-                target_user_id = desired_user_id
-            elif user_id is None or desired_user_id != user_id:
-                self.log.warning(
-                    "Rating creation forbidden for non-privileged override",
-                    product_id=product_id,
-                    actor_id=actor_id,
-                    requested_user_id=desired_user_id,
-                    resolved_user_id=user_id,
-                )
-                return error_response(
-                    "FORBIDDEN",
-                    "You do not have permission to rate on behalf of other users",
-                    {"userId": str(desired_user_id)},
-                )
-        if target_user_id is None:
-            self.log.warning(
-                "Rating creation missing user identifier",
-                product_id=product_id,
-                actor_id=actor_id,
-            )
-            return error_response(
-                "VALIDATION_ERROR", "Authentication required", {"userId": None}
-            )
-        value = request.data.get("value")
-        try:
-            value = int(value)
-        except (TypeError, ValueError):
-            self.log.warning(
-                "Invalid rating payload",
+                "Rating value missing from pre-validation",
                 product_id=product_id,
                 user_id=target_user_id,
-                value=value,
             )
             return error_response(
-                "VALIDATION_ERROR", "value must be between 0 and 5", {"value": value}
+                "VALIDATION_ERROR",
+                "value must be between 0 and 5",
+                {"value": None},
             )
         self.log.info(
             "Setting product rating",
@@ -595,49 +448,16 @@ class ProductRatingView(APIView):
         },
     )
     def delete(self, request, product_id: int):
-        user_id = self._current_user_id(request)
-        user = getattr(request, "user", None)
-        actor_id = getattr(user, "id", None)
-        is_staff = bool(getattr(user, "is_staff", False) or getattr(user, "is_superuser", False))
-        if is_staff and (user_id is None or user_id == actor_id):
+        actor_id, user_id, _target_user_id, is_privileged = self._context(request)
+        rating_id = getattr(request, "rating_id", None)
+        if rating_id is None:
             self.log.warning(
-                "Staff/admin attempted to delete own rating",
-                product_id=product_id,
-                actor_id=actor_id,
-            )
-            return error_response(
-                "FORBIDDEN", "Staff and admin accounts cannot rate products for themselves"
-            )
-        is_privileged = bool(
-            getattr(request, "is_privileged_user", False)
-            or getattr(user, "is_staff", False)
-            or getattr(user, "is_superuser", False)
-        )
-        raw_rating_id = request.query_params.get("ratingId") or request.query_params.get(
-            "rating_id"
-        )
-        if raw_rating_id is None:
-            self.log.warning(
-                "Rating delete missing identifier",
+                "Rating identifier missing from pre-validation",
                 product_id=product_id,
                 actor_id=actor_id,
             )
             return error_response(
                 "VALIDATION_ERROR", "ratingId is required", {"ratingId": None}
-            )
-        try:
-            rating_id = int(raw_rating_id)
-        except (TypeError, ValueError):
-            self.log.warning(
-                "Invalid ratingId parameter",
-                product_id=product_id,
-                actor_id=actor_id,
-                raw_value=raw_rating_id,
-            )
-            return error_response(
-                "VALIDATION_ERROR",
-                "ratingId must be an integer",
-                {"ratingId": raw_rating_id},
             )
         effective_actor_id = user_id if user_id is not None else actor_id
         self.log.info(

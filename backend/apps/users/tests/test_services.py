@@ -190,7 +190,8 @@ class UserServiceUnitTests(unittest.TestCase):
                 "geolocation": {"lat": "1.0", "long": "2.0"},
             },
         }
-        dto = self.service.create_user(payload.copy())
+        dto, error = self.service.create_user(payload.copy())
+        self.assertIsNone(error)
         self.assertEqual(dto["username"], "alice")
         self.assertEqual(dto["addresses"], [1])
         stored_user = self.user_repo.get(id=dto["id"])

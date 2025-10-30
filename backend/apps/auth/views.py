@@ -24,7 +24,7 @@ from .serializers import (
     CustomerTokenObtainPairSerializer,
     StaffTokenObtainPairSerializer,
 )
-from .container import build_registration_service
+from .container import build_registration_service, build_session_service
 
 User = get_user_model()
 logger = get_logger(__name__).bind(component="auth", layer="view")
@@ -153,6 +153,7 @@ class MeView(APIView):
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
     log = logger.bind(view="LogoutView")
+    service = build_session_service()
 
     @extend_schema(
         summary="Logout (blacklist refresh)",
@@ -163,19 +164,19 @@ class LogoutView(APIView):
         },
     )
     def post(self, request):
-        try:
-            refresh_token = request.data.get("refresh")
-            token = RefreshToken(refresh_token)
-            token.blacklist()
-            self.log.info("User logged out", user_id=getattr(request.user, "id", None))
-            return Response({"detail": "Logged out"}, status=status.HTTP_200_OK)
-        except Exception as e:
-            self.log.exception(
-                "Logout failed", user_id=getattr(request.user, "id", None)
-            )
-            return error_response(
-                "VALIDATION_ERROR", "Invalid token", {"error": str(e)}
-            )
+        serializer = LogoutRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        refresh_token = serializer.validated_data["refresh"]
+        actor_id = getattr(request.user, "id", None)
+        self.log.debug("Processing logout request", actor_id=actor_id)
+        result = self.service.logout(refresh_token, actor_id)
+        if result:
+            code, message, details = result
+            return error_response(code, message, details)
+        return Response(
+            DetailResponseSerializer({"detail": "Logged out"}).data,
+            status=status.HTTP_200_OK,
+        )
 
 
 @extend_schema(
@@ -186,6 +187,7 @@ class LogoutView(APIView):
 class LogoutAllView(APIView):
     permission_classes = [IsAuthenticated]
     log = logger.bind(view="LogoutAllView")
+    service = build_session_service()
 
     @extend_schema(
         summary="Logout from all devices",
@@ -196,26 +198,7 @@ class LogoutAllView(APIView):
         },
     )
     def post(self, request):
-        user = request.user
-        tokens_queryset = OutstandingToken.objects.filter(user=user)
-        tokens = list(tokens_queryset)
-        count = len(tokens)
-        user_id = getattr(user, "id", None)
-        for token in tokens:
-            try:
-                BlacklistedToken.objects.get_or_create(token=token)
-            except Exception as exc:
-                token_id = getattr(token, "id", getattr(token, "token", None))
-                self.log.exception(
-                    "Failed to blacklist token during logout-all",
-                    user_id=user_id,
-                    token_id=token_id,
-                )
-        self.log.info(
-            "User logged out from all devices",
-            user_id=user_id,
-            tokens_invalidated=count,
-        )
-        return Response(
-            {"detail": "Logged out from all devices"}, status=status.HTTP_200_OK
-        )
+        actor_id = getattr(request.user, "id", None)
+        self.log.debug("Processing logout-all request", actor_id=actor_id)
+        payload = self.service.logout_all(request.user)
+        return Response(DetailResponseSerializer({"detail": payload["detail"]}).data, status=status.HTTP_200_OK)

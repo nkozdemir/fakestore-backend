@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from django.db import transaction, IntegrityError
 from django.utils import timezone
@@ -51,9 +51,118 @@ class CartService:
         qs = self.carts.list(user_id=user_id) if user_id else self.carts.list()
         return self.cart_mapper.many_to_dto(qs)
 
+    def list_carts_with_auth(
+        self,
+        *,
+        actor_id: Optional[int],
+        is_privileged: bool,
+        mode: Optional[str],
+        target_user_id: Optional[int],
+    ) -> Tuple[Optional[Any], Optional[Tuple[str, str, Optional[Dict[str, Any]]]]]:
+        self.logger.debug(
+            "Listing carts with context",
+            actor_id=actor_id,
+            privileged=is_privileged,
+            mode=mode,
+            target_user_id=target_user_id,
+        )
+        if mode == "filtered" and target_user_id is not None:
+            data = self.list_carts(user_id=target_user_id)
+            return data, None
+        if mode == "self" and target_user_id is not None:
+            try:
+                dto, _created = self.get_or_create_cart(target_user_id)
+            except CartNotAllowedError as exc:
+                self.logger.warning(
+                    "Cart access not allowed for user",
+                    actor_id=actor_id,
+                    target_user_id=target_user_id,
+                    error=str(exc),
+                )
+                code = "NOT_FOUND" if "does not exist" in str(exc) else "FORBIDDEN"
+                message = (
+                    "Target user not found"
+                    if code == "NOT_FOUND"
+                    else "Staff and admin accounts cannot own carts"
+                )
+                return None, (code, message, {"userId": str(target_user_id)})
+            except CartAlreadyExistsError:
+                dto = self.get_cart_for_user(target_user_id)
+            payload = [dto] if dto else []
+            self.logger.debug(
+                "Returning cart for user via query lookup",
+                actor_id=actor_id,
+                user_id=target_user_id,
+                has_cart=bool(dto),
+            )
+            return payload, None
+        user_filter = target_user_id if mode == "filtered" else None
+        data = self.list_carts(user_id=user_filter)
+        return data, None
+
     def get_cart_for_user(self, user_id: int):
         cart = self.carts.get(user_id=user_id)
         return self.cart_mapper.to_dto(cart) if cart else None
+
+    def create_cart_with_auth(
+        self,
+        *,
+        actor_id: Optional[int],
+        target_user_id: Optional[int],
+        payload: Dict[str, Any],
+        is_privileged: bool,
+    ) -> Tuple[
+        Optional[Any], Optional[bool], Optional[Tuple[str, str, Optional[Dict[str, Any]]]]
+    ]:
+        self.logger.debug(
+            "Creating cart with context",
+            actor_id=actor_id,
+            target_user_id=target_user_id,
+            privileged=is_privileged,
+        )
+        if actor_id is None:
+            self.logger.warning("Cart creation unauthorized", target_user_id=target_user_id)
+            return None, None, ("UNAUTHORIZED", "Authentication required", None)
+        effective_target = target_user_id if (is_privileged and target_user_id is not None) else actor_id
+        if not is_privileged and target_user_id is not None and target_user_id != actor_id:
+            self.logger.warning(
+                "Cart creation forbidden for non-privileged override",
+                actor_id=actor_id,
+                desired_user_id=target_user_id,
+            )
+            return (
+                None,
+                None,
+                (
+                    "FORBIDDEN",
+                    "You do not have permission to create carts for other users",
+                    {"userId": str(target_user_id)},
+                ),
+            )
+        try:
+            dto, created = self.get_or_create_cart(int(effective_target), payload)
+        except CartNotAllowedError as exc:
+            self.logger.warning(
+                "Cart creation not allowed",
+                actor_id=actor_id,
+                target_user_id=effective_target,
+                error=str(exc),
+            )
+            code = "NOT_FOUND" if "does not exist" in str(exc) else "FORBIDDEN"
+            message = (
+                "Target user not found"
+                if code == "NOT_FOUND"
+                else "Staff and admin accounts cannot own carts"
+            )
+            return (
+                None,
+                None,
+                (code, message, {"userId": str(effective_target)}),
+            )
+        except CartAlreadyExistsError:
+            dto = self.get_cart_for_user(int(effective_target))
+            created = False
+        return dto, created, None
 
     def get_or_create_cart(
         self, user_id: int, data: Optional[Dict[str, Any]] = None
@@ -97,6 +206,108 @@ class CartService:
         if not cart:
             self.logger.info("Cart not found", cart_id=cart_id)
         return self.cart_mapper.to_dto(cart) if cart else None
+
+    def get_cart_with_access(
+        self,
+        cart_id: int,
+        actor_id: Optional[int],
+        is_privileged: bool,
+    ) -> Tuple[Optional[Any], Optional[Tuple[str, str, Optional[Dict[str, Any]]]]]:
+        self.logger.debug(
+            "Resolving cart access",
+            cart_id=cart_id,
+            actor_id=actor_id,
+            privileged=is_privileged,
+        )
+        cart = self.carts.get(id=cart_id)
+        if not cart:
+            self.logger.info("Cart not found", cart_id=cart_id)
+            return None, ("NOT_FOUND", "Cart not found", {"id": str(cart_id)})
+        owner_id = getattr(cart, "user_id", None)
+        if not is_privileged:
+            if actor_id is None:
+                self.logger.warning(
+                    "Cart access unauthorized",
+                    cart_id=cart_id,
+                    owner_id=owner_id,
+                )
+                return None, ("UNAUTHORIZED", "Authentication required", None)
+            if owner_id != actor_id:
+                self.logger.warning(
+                    "Cart access forbidden",
+                    cart_id=cart_id,
+                    actor_id=actor_id,
+                    owner_id=owner_id,
+                )
+                return (
+                    None,
+                    (
+                        "FORBIDDEN",
+                        "You do not have permission to view this cart",
+                        {"id": str(cart_id)},
+                    ),
+                )
+        dto = self.cart_mapper.to_dto(cart)
+        return dto, None
+
+    def authorize_cart_mutation(
+        self,
+        cart_id: int,
+        actor_id: Optional[int],
+        is_privileged: bool,
+        desired_user_id: Optional[int] = None,
+    ) -> Tuple[Optional[Any], Optional[Tuple[str, str, Optional[Dict[str, Any]]]]]:
+        self.logger.debug(
+            "Authorizing cart mutation",
+            cart_id=cart_id,
+            actor_id=actor_id,
+            privileged=is_privileged,
+            desired_user_id=desired_user_id,
+        )
+        cart = self.carts.get(id=cart_id)
+        if not cart:
+            self.logger.warning("Cart mutation failed: not found", cart_id=cart_id)
+            return None, ("NOT_FOUND", "Cart not found", {"id": str(cart_id)})
+        owner_id = getattr(cart, "user_id", None)
+        if not is_privileged:
+            if actor_id is None:
+                self.logger.warning(
+                    "Cart mutation unauthorized",
+                    cart_id=cart_id,
+                )
+                return None, ("UNAUTHORIZED", "Authentication required", None)
+            if owner_id != actor_id:
+                self.logger.warning(
+                    "Cart mutation forbidden",
+                    cart_id=cart_id,
+                    actor_id=actor_id,
+                    owner_id=owner_id,
+                )
+                return (
+                    None,
+                    (
+                        "FORBIDDEN",
+                        "You do not have permission to modify this cart",
+                        {"id": str(cart_id)},
+                    ),
+                )
+            if desired_user_id is not None and int(desired_user_id) != actor_id:
+                self.logger.warning(
+                    "Cart reassignment forbidden",
+                    cart_id=cart_id,
+                    actor_id=actor_id,
+                    desired_user_id=desired_user_id,
+                )
+                return (
+                    None,
+                    (
+                        "FORBIDDEN",
+                        "You do not have permission to reassign this cart",
+                        {"userId": str(desired_user_id)},
+                    ),
+                )
+        dto = self.cart_mapper.to_dto(cart)
+        return dto, None
 
     def create_cart(self, user_id: int, data: Dict[str, Any]):
         self.logger.info("Creating cart", user_id=user_id)

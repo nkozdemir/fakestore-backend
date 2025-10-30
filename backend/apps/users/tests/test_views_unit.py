@@ -9,13 +9,29 @@ from apps.users.views import (
     UserAddressListView,
     UserAddressDetailView,
 )
+from apps.api.validation import validate_request_context
 
 
 class DummyRequest:
-    def __init__(self, data=None, user=None, is_privileged_user=False):
+    def __init__(
+        self,
+        data=None,
+        user=None,
+        *,
+        method="GET",
+        query_params=None,
+        headers=None,
+        is_privileged_user=False,
+    ):
         self.data = data or {}
         self.user = user
+        self.method = method
+        self.query_params = query_params or {}
+        self.GET = self.query_params
+        self.headers = headers or {}
+        self.META = {}
         self.is_privileged_user = is_privileged_user
+        self.validated_user_id = None
 
 
 class FakeUserSerializer:
@@ -81,22 +97,25 @@ class FakeAddressSerializer:
 class StubUserService:
     def __init__(self):
         self.list_result = []
-        self.create_result = {"id": 1}
+        self.create_result = ({"id": 1}, None)
         self.get_result = {"id": 1}
         self.update_result = {"id": 1}
+        self.process_user_update_result = ({"id": 1}, None)
         self.delete_result = True
-        self.address_list_result = []
-        self.address_create_result = {"id": 1}
-        self.address_get_result = {"id": 1}
-        self.address_update_result = {"id": 1}
-        self.address_delete_result = True
-        self.address_with_owner_result = ({"id": 1}, 1)
+        self.list_addresses_with_auth_result = ([], None)
+        self.create_address_with_auth_result = ({"id": 1}, None)
+        self.get_address_with_auth_result = ({"id": 1}, 1, None)
+        self.update_address_with_auth_result = ({"id": 1}, None)
+        self.delete_address_with_auth_result = (True, None)
         self.last_create_payload = None
         self.last_update_payload = None
+        self.last_process_user_update_args = None
         self.last_delete_id = None
-        self.last_address_create = None
-        self.last_address_update = None
-        self.last_address_delete = None
+        self.last_list_addresses_with_auth_args = None
+        self.last_create_address_with_auth_args = None
+        self.last_get_address_with_auth_args = None
+        self.last_update_address_with_auth_args = None
+        self.last_delete_address_with_auth_args = None
 
     def list_users(self):
         return self.list_result
@@ -105,7 +124,9 @@ class StubUserService:
         if isinstance(self.create_result, Exception):
             raise self.create_result
         self.last_create_payload = data
-        return self.create_result
+        if isinstance(self.create_result, tuple):
+            return self.create_result
+        return self.create_result, None
 
     def get_user(self, user_id):
         return self.get_result
@@ -116,30 +137,82 @@ class StubUserService:
         self.last_update_payload = (user_id, data)
         return self.update_result
 
+    def process_user_update(self, user_id, data, *, partial):
+        self.last_process_user_update_args = (user_id, data, partial)
+        result = self.process_user_update_result
+        if isinstance(result, Exception):
+            raise result
+        return result
+
     def delete_user(self, user_id):
         self.last_delete_id = user_id
         return self.delete_result
 
     def list_user_addresses(self, user_id):
-        return self.address_list_result
+        return self.list_addresses_with_auth_result[0]
 
-    def create_user_address(self, user_id, data):
-        self.last_address_create = (user_id, data)
-        return self.address_create_result
+    def list_user_addresses_with_auth(self, user_id, *, actor_id, is_superuser):
+        self.last_list_addresses_with_auth_args = (user_id, actor_id, is_superuser)
+        return self.list_addresses_with_auth_result
 
-    def get_user_address(self, user_id, address_id):
-        return self.address_get_result
+    def create_user_address_with_auth(
+        self, user_id, data, *, actor_id, is_superuser
+    ):
+        self.last_create_address_with_auth_args = (
+            user_id,
+            data,
+            actor_id,
+            is_superuser,
+        )
+        return self.create_address_with_auth_result
 
-    def update_user_address(self, user_id, address_id, data):
-        self.last_address_update = (user_id, address_id, data)
-        return self.address_update_result
+    def get_address_with_auth(
+        self,
+        address_id,
+        *,
+        actor_id,
+        is_superuser,
+        action="retrieve",
+    ):
+        self.last_get_address_with_auth_args = (
+            address_id,
+            actor_id,
+            is_superuser,
+            action,
+        )
+        return self.get_address_with_auth_result
 
-    def delete_user_address(self, user_id, address_id):
-        self.last_address_delete = (user_id, address_id)
-        return self.address_delete_result
+    def update_user_address_with_auth(
+        self,
+        address_id,
+        data,
+        *,
+        actor_id,
+        is_superuser,
+        partial,
+    ):
+        self.last_update_address_with_auth_args = (
+            address_id,
+            data,
+            actor_id,
+            is_superuser,
+            partial,
+        )
+        return self.update_address_with_auth_result
 
-    def get_address_with_owner(self, address_id):
-        return self.address_with_owner_result
+    def delete_user_address_with_auth(
+        self,
+        address_id,
+        *,
+        actor_id,
+        is_superuser,
+    ):
+        self.last_delete_address_with_auth_args = (
+            address_id,
+            actor_id,
+            is_superuser,
+        )
+        return self.delete_address_with_auth_result
 
 
 class UserViewsUnitTests(unittest.TestCase):
@@ -157,11 +230,28 @@ class UserViewsUnitTests(unittest.TestCase):
         self.user_serializer_patch.start()
         self.address_write_patch.start()
         self.address_serializer_patch.start()
+        self.validation_user_patch = patch("apps.api.validation.User")
+        self.mock_validation_user = self.validation_user_patch.start()
+        manager = self.mock_validation_user.objects
+        manager.filter.return_value = manager
+        manager.exclude.return_value = manager
+        manager.exists.return_value = False
 
     def tearDown(self):
         self.user_serializer_patch.stop()
         self.address_write_patch.stop()
         self.address_serializer_patch.stop()
+        self.validation_user_patch.stop()
+
+    def dispatch(self, request, view_cls, *, method="get", **kwargs):
+        request.method = method.upper()
+        pre_response = validate_request_context(request, view_cls, kwargs)
+        if pre_response is not None:
+            return pre_response
+        view = view_cls()
+        view.service = self.service
+        handler = getattr(view, method.lower())
+        return handler(request, **kwargs)
 
     @staticmethod
     def _make_user(user_id=1, *, staff=False, superuser=False):
@@ -178,183 +268,251 @@ class UserViewsUnitTests(unittest.TestCase):
 
     def test_user_list_get_returns_service_data(self):
         self.service.list_result = [{"id": 1}]
-        view = UserListView()
-        view.service = self.service
         request = DummyRequest(
             user=self._make_user(user_id=5, staff=True),
-            is_privileged_user=True,
         )
-        response = view.get(request)
+        response = self.dispatch(request, UserListView, method="get")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data, [{"id": 1}])
 
     def test_user_list_get_requires_authentication(self):
-        view = UserListView()
-        view.service = self.service
-        response = view.get(DummyRequest())
+        response = self.dispatch(DummyRequest(), UserListView, method="get")
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(response.data["error"]["code"], "UNAUTHORIZED")
 
     def test_user_list_get_forbidden_for_non_privileged_user(self):
-        view = UserListView()
-        view.service = self.service
         request = DummyRequest(user=self._make_user(user_id=6))
-        response = view.get(request)
+        response = self.dispatch(request, UserListView, method="get")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(response.data["error"]["code"], "FORBIDDEN")
 
     def test_user_list_post_success_and_validation_error(self):
-        view = UserListView()
-        view.service = self.service
         success_request = DummyRequest(
             {"username": "new"},
             user=self._make_user(user_id=1, staff=True),
-            is_privileged_user=True,
+            method="POST",
         )
-        response_ok = view.post(success_request)
+        response_ok = self.dispatch(success_request, UserListView, method="post")
         self.assertEqual(response_ok.status_code, status.HTTP_201_CREATED)
         self.assertEqual(self.service.last_create_payload["username"], "new")
 
         invalid_request = DummyRequest(
             {"__invalid": True},
             user=self._make_user(user_id=1, staff=True),
-            is_privileged_user=True,
+            method="POST",
         )
-        response_invalid = view.post(invalid_request)
+        response_invalid = self.dispatch(invalid_request, UserListView, method="post")
         self.assertEqual(response_invalid.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_user_list_post_service_validation_error(self):
-        view = UserListView()
-        view.service = self.service
-        self.service.create_result = IntegrityError("duplicate")
+        self.service.create_result = (
+            None,
+            (
+                "VALIDATION_ERROR",
+                "Unique constraint violated",
+                {"detail": "duplicate"},
+            ),
+        )
         request = DummyRequest(
             {"username": "duplicate"},
             user=self._make_user(user_id=1, staff=True),
-            is_privileged_user=True,
+            method="POST",
         )
-        response = view.post(request)
+        response = self.dispatch(request, UserListView, method="post")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["error"]["code"], "VALIDATION_ERROR")
 
     def test_user_list_post_forbidden_when_authenticated_non_admin(self):
-        view = UserListView()
-        view.service = self.service
         request = DummyRequest(
             {"username": "dup"},
             user=self._make_user(5, staff=False, superuser=False),
+            method="POST",
         )
-        response = view.post(request)
+        response = self.dispatch(request, UserListView, method="post")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_user_detail_get_and_delete_paths(self):
-        view = UserDetailView()
-        view.service = self.service
-
         # Not found case
         self.service.get_result = None
-        response_missing = view.get(
-            DummyRequest(user=self._make_user(99)), user_id=99
+        response_missing = self.dispatch(
+            DummyRequest(user=self._make_user(99)),
+            UserDetailView,
+            method="get",
+            user_id=99,
         )
         self.assertEqual(response_missing.status_code, status.HTTP_404_NOT_FOUND)
 
         # Delete success
         self.service.delete_result = True
-        delete_req = DummyRequest(user=self._make_user(1))
-        delete_resp = view.delete(delete_req, user_id=1)
+        delete_req = DummyRequest(user=self._make_user(1), method="DELETE")
+        delete_resp = self.dispatch(delete_req, UserDetailView, method="delete", user_id=1)
         self.assertEqual(delete_resp.status_code, status.HTTP_204_NO_CONTENT)
 
         # Delete not found
         self.service.delete_result = False
-        delete_missing = view.delete(DummyRequest(user=self._make_user(2)), user_id=2)
+        delete_missing = self.dispatch(
+            DummyRequest(user=self._make_user(2), method="DELETE"),
+            UserDetailView,
+            method="delete",
+            user_id=2,
+        )
         self.assertEqual(delete_missing.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_user_detail_put_success(self):
-        view = UserDetailView()
-        view.service = self.service
-        self.service.update_result = {"id": 1, "username": "updated"}
-        with patch("apps.users.views.User") as mock_user_cls:
-            mock_user_cls.objects.filter.return_value.first.return_value = object()
-            response = view.put(
-                DummyRequest({"username": "updated"}, user=self._make_user(1)),
-                user_id=1,
-            )
+        self.service.process_user_update_result = (
+            {"id": 1, "username": "updated"},
+            None,
+        )
+        response = self.dispatch(
+            DummyRequest(
+                {"username": "updated"},
+                user=self._make_user(1),
+                method="PUT",
+            ),
+            UserDetailView,
+            method="put",
+            user_id=1,
+        )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        user_id, payload = self.service.last_update_payload
+        user_id, payload, partial = self.service.last_process_user_update_args
         self.assertEqual(user_id, 1)
+        self.assertFalse(partial)
         self.assertEqual(payload["username"], "updated")
 
     def test_user_detail_patch_invalid_serializer(self):
-        view = UserDetailView()
-        view.service = self.service
-        with patch("apps.users.views.User") as mock_user_cls:
-            mock_user_cls.objects.filter.return_value.first.return_value = object()
-            response = view.patch(
-                DummyRequest({"__invalid": True}, user=self._make_user(1)), user_id=1
-            )
+        self.service.process_user_update_result = (
+            None,
+            ("VALIDATION_ERROR", "Invalid input", {"invalid": True}),
+        )
+        response = self.dispatch(
+            DummyRequest(
+                {"__invalid": True},
+                user=self._make_user(1),
+                method="PATCH",
+            ),
+            UserDetailView,
+            method="patch",
+            user_id=1,
+        )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_user_address_list_post_requires_auth(self):
-        view = UserAddressListView()
-        view.service = self.service
-        unauthorized = view.post(DummyRequest({"street": "Main"}), user_id=1)
+        unauthorized = self.dispatch(
+            DummyRequest({"street": "Main"}, method="POST"),
+            UserAddressListView,
+            method="post",
+            user_id=1,
+        )
         self.assertEqual(unauthorized.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_user_address_list_post_success(self):
-        view = UserAddressListView()
-        view.service = self.service
-        self.service.address_create_result = {"id": 1, "street": "Main"}
-        request = DummyRequest({"street": "Main"}, user=self._make_user(5))
-        request.validated_user_id = 5
-        response = view.post(request, user_id=5)
+        self.service.create_address_with_auth_result = ({"id": 1, "street": "Main"}, None)
+        request = DummyRequest(
+            {"street": "Main"},
+            user=self._make_user(5),
+            method="POST",
+        )
+        response = self.dispatch(
+            request,
+            UserAddressListView,
+            method="post",
+            user_id=5,
+        )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(self.service.last_address_create[0], 5)
+        user_id, data, actor_id, is_superuser = self.service.last_create_address_with_auth_args
+        self.assertEqual(user_id, 5)
+        self.assertEqual(data["street"], "Main")
+        self.assertEqual(actor_id, 5)
+        self.assertFalse(is_superuser)
 
     def test_user_address_list_post_forbidden_for_other_user(self):
-        view = UserAddressListView()
-        view.service = self.service
-        request = DummyRequest({"street": "Main"}, user=self._make_user(3))
-        request.validated_user_id = 3
-        response = view.post(request, user_id=9)
+        self.service.create_address_with_auth_result = (
+            None,
+            (
+                "FORBIDDEN",
+                "You do not have permission to manage this user's addresses",
+                None,
+            ),
+        )
+        response = self.dispatch(
+            DummyRequest(
+                {"street": "Main"},
+                user=self._make_user(3),
+                method="POST",
+            ),
+            UserAddressListView,
+            method="post",
+            user_id=9,
+        )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_user_address_detail_get_and_delete(self):
-        view = UserAddressDetailView()
-        view.service = self.service
-        response_unauth = view.get(DummyRequest(), address_id=1)
+        response_unauth = self.dispatch(
+            DummyRequest(),
+            UserAddressDetailView,
+            method="get",
+            address_id=1,
+        )
         self.assertEqual(response_unauth.status_code, status.HTTP_401_UNAUTHORIZED)
 
         user = self._make_user(7)
-        self.service.address_with_owner_result = (None, None)
-        req_missing = DummyRequest(user=user)
-        req_missing.validated_user_id = user.id
-        response_missing = view.get(req_missing, address_id=1)
+        self.service.get_address_with_auth_result = (
+            None,
+            None,
+            ("NOT_FOUND", "Address not found", {"address_id": "1"}),
+        )
+        response_missing = self.dispatch(
+            DummyRequest(user=user),
+            UserAddressDetailView,
+            method="get",
+            address_id=1,
+        )
         self.assertEqual(response_missing.status_code, status.HTTP_404_NOT_FOUND)
 
-        self.service.address_delete_result = True
-        self.service.address_with_owner_result = ({"id": 1}, user.id)
-        req_delete = DummyRequest(user=user)
-        req_delete.validated_user_id = user.id
-        delete_resp = view.delete(req_delete, address_id=1)
+        self.service.delete_address_with_auth_result = (True, None)
+        delete_resp = self.dispatch(
+            DummyRequest(user=user, method="DELETE"),
+            UserAddressDetailView,
+            method="delete",
+            address_id=1,
+        )
         self.assertEqual(delete_resp.status_code, status.HTTP_204_NO_CONTENT)
-        self.assertEqual(self.service.last_address_delete, (user.id, 1))
+        address_id, actor_id, is_superuser = self.service.last_delete_address_with_auth_args
+        self.assertEqual(address_id, 1)
+        self.assertEqual(actor_id, 7)
+        self.assertFalse(is_superuser)
 
     def test_user_address_detail_forbidden_for_other_user(self):
-        view = UserAddressDetailView()
-        view.service = self.service
-        self.service.address_with_owner_result = ({"id": 1}, 9)
+        self.service.get_address_with_auth_result = (
+            None,
+            9,
+            (
+                "FORBIDDEN",
+                "You do not have permission to manage this user's addresses",
+                None,
+            ),
+        )
         actor = self._make_user(3)
-        request = DummyRequest(user=actor)
-        request.validated_user_id = actor.id
-        response = view.get(request, address_id=1)
+        response = self.dispatch(
+            DummyRequest(user=actor),
+            UserAddressDetailView,
+            method="get",
+            address_id=1,
+        )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertIsNone(self.service.last_address_update)
+        self.assertIsNone(self.service.last_update_address_with_auth_args)
 
     def test_user_address_detail_superuser_access(self):
-        view = UserAddressDetailView()
-        view.service = self.service
         user = self._make_user(1, superuser=True)
-        request = DummyRequest(user=user)
-        request.validated_user_id = user.id
-        self.service.address_with_owner_result = ({"id": 2}, 9)
-        response = view.get(request, address_id=2)
+        self.service.get_address_with_auth_result = (
+            {"id": 2},
+            9,
+            None,
+        )
+        response = self.dispatch(
+            DummyRequest(user=user),
+            UserAddressDetailView,
+            method="get",
+            address_id=2,
+        )
         self.assertEqual(response.status_code, status.HTTP_200_OK)

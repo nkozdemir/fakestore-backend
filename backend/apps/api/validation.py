@@ -108,6 +108,116 @@ def _resolve_rating_user(
     return None
 
 
+def _rating_override_forbidden_message(method: str) -> str:
+    if method == "GET":
+        return "You do not have permission to view ratings for other users"
+    if method == "POST":
+        return "You do not have permission to rate on behalf of other users"
+    return "You do not have permission to manage ratings for other users"
+
+
+def _apply_rating_user_override(
+    request: HttpRequest,
+    *,
+    method: str,
+    is_privileged: bool,
+    resolved_user_id: Optional[int],
+    actor_id: Optional[int],
+) -> Any:
+    raw_user_id = request.GET.get("userId") or request.GET.get("user_id")
+    if raw_user_id is None:
+        request.rating_target_user_id = resolved_user_id
+        return None
+    try:
+        desired_user_id = int(raw_user_id)
+    except (TypeError, ValueError):
+        logger.warning(
+            "Invalid userId query parameter provided",
+            view="ProductRatingView",
+            method=method,
+            actor_id=actor_id,
+            raw_value=raw_user_id,
+        )
+        return error_response(
+            "VALIDATION_ERROR",
+            "userId must be an integer",
+            {"userId": raw_user_id},
+        )
+    if is_privileged:
+        request.rating_target_user_id = desired_user_id
+        request.rating_user_override_applied = True
+        request.rating_requested_user_id = desired_user_id
+        return None
+    if resolved_user_id is None or desired_user_id != resolved_user_id:
+        logger.warning(
+            "Rating override forbidden",
+            view="ProductRatingView",
+            method=method,
+            actor_id=actor_id,
+            requested_user_id=desired_user_id,
+            resolved_user_id=resolved_user_id,
+        )
+        return error_response(
+            "FORBIDDEN",
+            _rating_override_forbidden_message(method),
+            {"userId": str(desired_user_id)},
+        )
+    request.rating_target_user_id = resolved_user_id
+    return None
+
+
+def _parse_rating_value(request: HttpRequest, *, product_id: Optional[int]) -> Any:
+    data = _extract_request_data(request) or {}
+    value = data.get("value")
+    try:
+        rating_value = int(value)
+    except (TypeError, ValueError):
+        logger.warning(
+            "Invalid rating payload",
+            view="ProductRatingView",
+            product_id=product_id,
+            value=value,
+        )
+        return error_response(
+            "VALIDATION_ERROR",
+            "value must be between 0 and 5",
+            {"value": value},
+        )
+    request.rating_value = rating_value
+    return None
+
+
+def _parse_rating_identifier(request: HttpRequest, *, product_id: Optional[int], actor_id: Optional[int]) -> Any:
+    raw_rating_id = request.GET.get("ratingId") or request.GET.get("rating_id")
+    if raw_rating_id is None:
+        logger.warning(
+            "Rating delete missing identifier",
+            view="ProductRatingView",
+            product_id=product_id,
+            actor_id=actor_id,
+        )
+        return error_response(
+            "VALIDATION_ERROR", "ratingId is required", {"ratingId": None}
+        )
+    try:
+        rating_id = int(raw_rating_id)
+    except (TypeError, ValueError):
+        logger.warning(
+            "Invalid ratingId parameter",
+            view="ProductRatingView",
+            product_id=product_id,
+            actor_id=actor_id,
+            raw_value=raw_rating_id,
+        )
+        return error_response(
+            "VALIDATION_ERROR",
+            "ratingId must be an integer",
+            {"ratingId": raw_rating_id},
+        )
+    request.rating_id = rating_id
+    return None
+
+
 def _validate_user_uniqueness(
     request: HttpRequest, user_id: Optional[int] = None
 ) -> Any:
@@ -159,18 +269,103 @@ def validate_request_context(request: HttpRequest, view_class, view_kwargs) -> A
             if not _is_authenticated_user(request):
                 logger.warning("CartListView GET requires authentication")
                 return error_response("UNAUTHORIZED", "Authentication required")
-            _set_validated_user(request, int(request.user.id))
+            actor_id = int(request.user.id)
+            _set_validated_user(request, actor_id)
+            is_privileged = _is_privileged_user(request.user)
+            request.cart_is_privileged = is_privileged
+            request.cart_list_mode = "all"
+            request.cart_list_target_user_id = None
+            raw_user_id = request.GET.get("userId") or request.GET.get("user_id")
+            if raw_user_id is not None:
+                try:
+                    target_user_id = int(raw_user_id)
+                except (TypeError, ValueError):
+                    logger.warning(
+                        "Invalid userId query parameter",
+                        view=view_name,
+                        value=raw_user_id,
+                    )
+                    return error_response(
+                        "VALIDATION_ERROR",
+                        "userId must be an integer",
+                        {"userId": raw_user_id},
+                    )
+                request.cart_list_target_user_id = target_user_id
+                if is_privileged:
+                    request.cart_list_mode = "filtered"
+                elif actor_id == target_user_id:
+                    request.cart_list_mode = "self"
+                else:
+                    logger.warning(
+                        "Cart list forbidden for non-privileged override",
+                        actor_id=actor_id,
+                        target_user_id=target_user_id,
+                    )
+                    return error_response(
+                        "FORBIDDEN",
+                        "You do not have permission to view this user's carts",
+                        {"userId": raw_user_id},
+                    )
+            else:
+                if not is_privileged:
+                    logger.warning(
+                        "Cart list forbidden for non-privileged user",
+                        actor_id=actor_id,
+                    )
+                    return error_response(
+                        "FORBIDDEN",
+                        "You do not have permission to list carts",
+                    )
             logger.debug(
-                "Validated cart list user",
-                user_id=request.user.id,
-                privileged=_is_privileged_user(request.user),
+                "Validated cart list context",
+                actor_id=actor_id,
+                privileged=is_privileged,
+                mode=request.cart_list_mode,
+                target_user_id=request.cart_list_target_user_id,
             )
         if request.method in ("POST",):
             if not _is_authenticated_user(request):
                 logger.warning("CartListView POST requires authentication")
                 return error_response("UNAUTHORIZED", "Authentication required")
-            _set_validated_user(request, int(request.user.id))
-            logger.debug("Validated cart list user", user_id=request.user.id)
+            actor_id = int(request.user.id)
+            _set_validated_user(request, actor_id)
+            is_privileged = _is_privileged_user(request.user)
+            raw_user_id = request.GET.get("userId") or request.GET.get("user_id")
+            target_user_id = actor_id
+            if raw_user_id is not None:
+                try:
+                    desired_user_id = int(raw_user_id)
+                except (TypeError, ValueError):
+                    logger.warning(
+                        "Invalid userId query parameter provided for cart creation",
+                        raw_value=raw_user_id,
+                    )
+                    return error_response(
+                        "VALIDATION_ERROR",
+                        "userId must be an integer",
+                        {"userId": raw_user_id},
+                    )
+                if is_privileged:
+                    target_user_id = desired_user_id
+                elif desired_user_id != actor_id:
+                    logger.warning(
+                        "Cart creation forbidden for non-privileged override",
+                        actor_id=actor_id,
+                        desired_user_id=desired_user_id,
+                    )
+                    return error_response(
+                        "FORBIDDEN",
+                        "You do not have permission to create carts for other users",
+                        {"userId": str(desired_user_id)},
+                    )
+            request.cart_target_user_id = target_user_id
+            request.cart_is_privileged = is_privileged
+            logger.debug(
+                "Validated cart creation context",
+                actor_id=actor_id,
+                target_user_id=target_user_id,
+                privileged=is_privileged,
+            )
     elif view_name == "CartDetailView":
         if request.method in ("GET", "PUT", "PATCH", "DELETE"):
             if not _is_authenticated_user(request):
@@ -185,19 +380,79 @@ def validate_request_context(request: HttpRequest, view_class, view_kwargs) -> A
                 method=request.method,
             )
     elif view_name == "ProductRatingView":
+        method = getattr(request, "method", "")
+        product_id = view_kwargs.get("product_id")
         if not _is_authenticated_user(request):
             logger.warning(
-                "ProductRatingView requires authentication", method=request.method
+                "ProductRatingView requires authentication", method=method
             )
             return error_response("UNAUTHORIZED", "Authentication required")
-        resp = _resolve_rating_user(
-            request, require=request.method in ("POST", "DELETE")
-        )
+        resp = _resolve_rating_user(request, require=method in ("POST", "DELETE"))
         if resp:
             logger.warning(
-                "Product rating validation rejected request", method=request.method
+                "Product rating validation rejected request", method=method
             )
             return resp
+        actor = getattr(request, "user", None)
+        actor_id = getattr(actor, "id", None)
+        request.rating_actor_id = actor_id
+        is_staff = bool(
+            getattr(actor, "is_staff", False) or getattr(actor, "is_superuser", False)
+        )
+        request.rating_is_staff = is_staff
+        is_privileged = bool(getattr(request, "is_privileged_user", False) or is_staff)
+        request.rating_is_privileged = is_privileged
+        resolved_user_id = getattr(request, "rating_user_id", None)
+        request.rating_target_user_id = resolved_user_id
+        if method in ("POST", "DELETE") and is_staff and (
+            resolved_user_id is None or resolved_user_id == actor_id
+        ):
+            log_message = (
+                "Staff/admin attempted to rate own account"
+                if method == "POST"
+                else "Staff/admin attempted to delete own rating"
+            )
+            logger.warning(
+                log_message,
+                view="ProductRatingView",
+                product_id=product_id,
+                actor_id=actor_id,
+            )
+            return error_response(
+                "FORBIDDEN",
+                "Staff and admin accounts cannot rate products for themselves",
+            )
+        override_response = _apply_rating_user_override(
+            request,
+            method=method,
+            is_privileged=is_privileged,
+            resolved_user_id=resolved_user_id,
+            actor_id=actor_id,
+        )
+        if override_response:
+            return override_response
+        target_user_id = getattr(request, "rating_target_user_id", resolved_user_id)
+        if method in ("POST", "DELETE") and target_user_id is None:
+            logger.warning(
+                "Rating action missing user identifier",
+                view="ProductRatingView",
+                method=method,
+                product_id=product_id,
+                actor_id=actor_id,
+            )
+            return error_response(
+                "VALIDATION_ERROR", "Authentication required", {"userId": None}
+            )
+        if method == "POST":
+            resp = _parse_rating_value(request, product_id=product_id)
+            if resp:
+                return resp
+        if method == "DELETE":
+            resp = _parse_rating_identifier(
+                request, product_id=product_id, actor_id=actor_id
+            )
+            if resp:
+                return resp
     elif view_name == "UserListView":
         if request.method in ("GET",):
             if not _is_authenticated_user(request):
@@ -261,11 +516,50 @@ def validate_request_context(request: HttpRequest, view_class, view_kwargs) -> A
                     "You do not have permission to manage products",
                 )
     elif view_name == "UserDetailView":
+        target_raw = view_kwargs.get("user_id")
+        try:
+            target_user_id = int(target_raw)
+        except (TypeError, ValueError):
+            logger.warning(
+                "Invalid user_id for user detail request",
+                value=target_raw,
+                method=request.method,
+            )
+            return error_response(
+                "VALIDATION_ERROR",
+                "Invalid user identifier",
+                {"userId": str(target_raw)},
+            )
+        if not _is_authenticated_user(request):
+            logger.warning(
+                "UserDetailView requires authentication",
+                method=request.method,
+                target_user_id=target_user_id,
+            )
+            return error_response("UNAUTHORIZED", "Authentication required")
+        actor_id = int(request.user.id)
+        _set_validated_user(request, actor_id)
+        is_privileged = _is_privileged_user(request.user)
+        request.user_detail_target_id = target_user_id
+        request.user_detail_is_privileged = is_privileged
+        if request.method in ("GET", "PUT", "PATCH", "DELETE") and not is_privileged and actor_id != target_user_id:
+            logger.warning(
+                "User detail access forbidden",
+                method=request.method,
+                actor_id=actor_id,
+                target_user_id=target_user_id,
+            )
+            return error_response(
+                "FORBIDDEN",
+                "You do not have permission to view or modify this user",
+            )
         if request.method in ("PUT", "PATCH"):
-            user_id = view_kwargs.get("user_id")
-            result = _validate_user_uniqueness(request, user_id=user_id)
+            result = _validate_user_uniqueness(request, user_id=target_user_id)
             if result:
-                logger.info("UserDetailView uniqueness check failed", user_id=user_id)
+                logger.info(
+                    "UserDetailView uniqueness check failed",
+                    user_id=target_user_id,
+                )
                 return result
     elif view_name == "CategoryDetailView":
         if request.method in ("PUT", "PATCH", "DELETE"):

@@ -3,6 +3,7 @@ import unittest
 from decimal import Decimal
 from unittest.mock import Mock, patch
 from rest_framework.test import APIRequestFactory, force_authenticate
+from rest_framework.response import Response
 from apps.catalog.views import (
     ProductListView,
     ProductDetailView,
@@ -11,6 +12,8 @@ from apps.catalog.views import (
     CategoryListView,
     CategoryDetailView,
 )
+from apps.catalog.pagination import ProductListPagination
+from apps.catalog.serializers import ProductReadSerializer
 from apps.catalog.dtos import ProductDTO, CategoryDTO
 from apps.api.validation import validate_request_context
 
@@ -49,29 +52,21 @@ class CatalogViewsUnitTests(unittest.TestCase):
         force_authenticate(request, user=user)
 
     def test_product_list_paginates_and_filters(self):
-        dto1 = make_product_dto(1)
-        dto2 = make_product_dto(2, title="Gadget")
         service_mock = Mock()
-        service_mock.products_queryset.return_value = ["p1", "p2"]
-
-        def map_side_effect(iterable):
-            items = list(iterable)
-            return [dto1, dto2][: len(items)]
-
-        with patch.object(ProductListView, "service", service_mock), patch(
-            "apps.catalog.views.ProductMapper.many_to_dto", side_effect=map_side_effect
-        ) as mapper_mock:
+        expected_response = Response({"results": []})
+        service_mock.list_products_paginated.return_value = expected_response
+        with patch.object(ProductListView, "service", service_mock):
             request = self.factory.get(
                 "/api/products/", {"limit": 1, "category": "electronics"}
             )
             response = self.dispatch(request, ProductListView)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["count"], 2)
-        self.assertEqual(len(response.data["results"]), 1)
-        service_mock.products_queryset.assert_called_once_with(category="electronics")
-        # Ensure pagination delivered a single item to the mapper
-        paginated_input = mapper_mock.call_args[0][0]
-        self.assertEqual(len(paginated_input), 1)
+        self.assertIs(response, expected_response)
+        service_mock.list_products_paginated.assert_called_once()
+        _, kwargs = service_mock.list_products_paginated.call_args
+        self.assertEqual(kwargs["category"], "electronics")
+        self.assertIs(kwargs["paginator_class"], ProductListPagination)
+        self.assertIs(kwargs["serializer_class"], ProductReadSerializer)
+        self.assertEqual(kwargs["view"].__class__, ProductListView)
 
     def test_product_list_post_creates_product(self):
         dto = make_product_dto(3, "Created")
@@ -154,7 +149,7 @@ class CatalogViewsUnitTests(unittest.TestCase):
 
     def test_product_detail_delete_success(self):
         service_mock = Mock()
-        service_mock.delete_product.return_value = True
+        service_mock.delete_product_with_auth.return_value = (True, None)
         user = types.SimpleNamespace(
             id=3, is_authenticated=True, is_staff=True, is_superuser=False
         )
@@ -166,7 +161,10 @@ class CatalogViewsUnitTests(unittest.TestCase):
 
     def test_product_detail_delete_not_found(self):
         service_mock = Mock()
-        service_mock.delete_product.return_value = False
+        service_mock.delete_product_with_auth.return_value = (
+            False,
+            ("NOT_FOUND", "Product not found", {"id": "8"}),
+        )
         user = types.SimpleNamespace(
             id=9, is_authenticated=True, is_staff=True, is_superuser=False
         )
@@ -175,7 +173,7 @@ class CatalogViewsUnitTests(unittest.TestCase):
             self.authenticate(request, user)
             response = self.dispatch(request, ProductDetailView, product_id=8)
         self.assertEqual(response.status_code, 404)
-        self.assertEqual(response.data["detail"], "Not found")
+        self.assertEqual(response.data["error"]["code"], "NOT_FOUND")
 
     def test_product_detail_delete_forbidden_for_non_admin(self):
         service_mock = Mock()
@@ -187,11 +185,11 @@ class CatalogViewsUnitTests(unittest.TestCase):
             self.authenticate(request, user)
             response = self.dispatch(request, ProductDetailView, product_id=4)
         self.assertEqual(response.status_code, 403)
-        service_mock.delete_product.assert_not_called()
+        service_mock.delete_product_with_auth.assert_not_called()
 
     def test_product_detail_patch_returns_404_when_missing(self):
         service_mock = Mock()
-        service_mock.get_product.return_value = None
+        service_mock.update_product.return_value = None
         user = types.SimpleNamespace(
             id=4, is_authenticated=True, is_staff=True, is_superuser=False
         )
@@ -202,7 +200,7 @@ class CatalogViewsUnitTests(unittest.TestCase):
             self.authenticate(request, user)
             response = self.dispatch(request, ProductDetailView, product_id=3)
         self.assertEqual(response.status_code, 404)
-        self.assertEqual(response.data["detail"], "Not found")
+        self.assertEqual(response.data["error"]["code"], "NOT_FOUND")
 
     def test_product_detail_put_success(self):
         dto = make_product_dto(6, "Updated")
@@ -243,10 +241,8 @@ class CatalogViewsUnitTests(unittest.TestCase):
         service_mock.update_product.assert_not_called()
 
     def test_product_detail_patch_success(self):
-        original = make_product_dto(7, "Original")
         updated = make_product_dto(7, "Patched")
         service_mock = Mock()
-        service_mock.get_product.return_value = original
         service_mock.update_product.return_value = updated
         user = types.SimpleNamespace(
             id=12, is_authenticated=True, is_staff=True, is_superuser=False
@@ -265,7 +261,7 @@ class CatalogViewsUnitTests(unittest.TestCase):
         created = make_category_dto(2, "B")
         service_mock = Mock()
         service_mock.list_categories.return_value = categories
-        service_mock.create_category.return_value = created
+        service_mock.create_category_with_auth.return_value = (created, None)
         user = types.SimpleNamespace(
             id=20, is_authenticated=True, is_staff=True, is_superuser=False
         )
@@ -296,7 +292,7 @@ class CatalogViewsUnitTests(unittest.TestCase):
             self.authenticate(request_post, user)
             response_post = self.dispatch(request_post, CategoryListView)
         self.assertEqual(response_post.status_code, 403)
-        service_mock.create_category.assert_not_called()
+        service_mock.create_category_with_auth.assert_not_called()
 
     def test_category_detail_get_and_not_found(self):
         service_mock = Mock()
@@ -317,12 +313,15 @@ class CatalogViewsUnitTests(unittest.TestCase):
 
     def test_category_detail_put_patch_and_delete(self):
         service_mock = Mock()
-        service_mock.update_category.side_effect = [
-            make_category_dto(5, "Updated"),
-            None,
-            make_category_dto(5, "Patched"),
+        service_mock.update_category_with_auth.side_effect = [
+            (make_category_dto(5, "Updated"), None),
+            (None, ("NOT_FOUND", "Category not found", {"id": "5"})),
+            (make_category_dto(5, "Patched"), None),
         ]
-        service_mock.delete_category.side_effect = [False, True]
+        service_mock.delete_category_with_auth.side_effect = [
+            (False, ("NOT_FOUND", "Category not found", {"id": "5"})),
+            (True, None),
+        ]
         user = types.SimpleNamespace(
             id=30, is_authenticated=True, is_staff=True, is_superuser=False
         )
@@ -377,7 +376,7 @@ class CatalogViewsUnitTests(unittest.TestCase):
 
     def test_category_detail_delete_forbidden_for_non_staff(self):
         service_mock = Mock()
-        service_mock.delete_category.return_value = True
+        service_mock.delete_category_with_auth.return_value = (True, None)
         with patch.object(CategoryDetailView, "service", service_mock):
             request_delete = self.factory.delete("/api/categories/5/")
             user = types.SimpleNamespace(
@@ -386,11 +385,14 @@ class CatalogViewsUnitTests(unittest.TestCase):
             self.authenticate(request_delete, user)
             response = self.dispatch(request_delete, CategoryDetailView, category_id=5)
         self.assertEqual(response.status_code, 403)
-        service_mock.delete_category.assert_not_called()
+        service_mock.delete_category_with_auth.assert_not_called()
 
     def test_category_detail_put_not_found(self):
         service_mock = Mock()
-        service_mock.update_category.return_value = None
+        service_mock.update_category_with_auth.return_value = (
+            None,
+            ("NOT_FOUND", "Category not found", {"id": "9"}),
+        )
         user = types.SimpleNamespace(
             id=31, is_authenticated=True, is_staff=True, is_superuser=False
         )

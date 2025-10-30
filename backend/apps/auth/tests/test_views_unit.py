@@ -249,50 +249,32 @@ class TokenSerializerTests(unittest.TestCase):
         service.is_username_available.assert_called_once_with("taken")
 
     def test_logout_view_success_and_failure(self):
-        blacklisted_tokens = []
-
-        class FakeRefreshToken:
-            def __init__(self, token):
-                self.token = token
-
-            def blacklist(self):
-                blacklisted_tokens.append(self.token)
-
-        request = DummyRequest({"refresh": "abc"}, user=object())
-        with patch("apps.auth.views.RefreshToken", FakeRefreshToken):
-            response_ok = LogoutView().post(request)
+        request = DummyRequest({"refresh": "abc"}, user=types.SimpleNamespace(id=5))
+        view = LogoutView()
+        view.service = Mock()
+        view.service.logout.return_value = None
+        response_ok = view.post(request)
         self.assertEqual(response_ok.status_code, status.HTTP_200_OK)
-        self.assertEqual(blacklisted_tokens, ["abc"])
+        view.service.logout.assert_called_once_with("abc", 5)
 
-        with patch("apps.auth.views.RefreshToken", side_effect=Exception("boom")):
-            response_fail = LogoutView().post(request)
+        view.service.logout.reset_mock()
+        view.service.logout.return_value = (
+            "VALIDATION_ERROR",
+            "Invalid token",
+            {"error": "boom"},
+        )
+        response_fail = view.post(request)
         self.assertEqual(response_fail.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response_fail.data["error"]["code"], "VALIDATION_ERROR")
 
     def test_logout_all_blacklists_every_token(self):
-        class FakeOutstandingManager:
-            def __init__(self, tokens):
-                self._tokens = tokens
-
-            def filter(self, **kwargs):
-                return self._tokens
-
-        class FakeBlacklistedManager:
-            def __init__(self):
-                self.called_with = []
-
-            def get_or_create(self, token):
-                self.called_with.append(token)
-                return (token, True)
-
-        tokens = [types.SimpleNamespace(token="t1"), types.SimpleNamespace(token="t2")]
-        outstanding_manager = FakeOutstandingManager(tokens)
-        blacklisted_manager = FakeBlacklistedManager()
-        with patch("apps.auth.views.OutstandingToken") as mock_outstanding, patch(
-            "apps.auth.views.BlacklistedToken"
-        ) as mock_blacklisted:
-            mock_outstanding.objects = outstanding_manager
-            mock_blacklisted.objects = blacklisted_manager
-            response = LogoutAllView().post(DummyRequest(user=object()))
+        view = LogoutAllView()
+        view.service = Mock()
+        view.service.logout_all.return_value = {
+            "detail": "Logged out from all devices",
+            "tokens_invalidated": 2,
+        }
+        actor = types.SimpleNamespace(id=10)
+        response = view.post(DummyRequest(user=actor))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(blacklisted_manager.called_with, tokens)
+        view.service.logout_all.assert_called_once_with(actor)

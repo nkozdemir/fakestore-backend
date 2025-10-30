@@ -65,7 +65,7 @@ class CartViewsUnitTests(unittest.TestCase):
             )
             return ValuesWrapper(info)
 
-        self.user_patch = patch("apps.carts.views.User")
+        self.user_patch = patch("apps.carts.services.User")
         self.mock_user_cls = self.user_patch.start()
         self.mock_user_cls.objects.filter.side_effect = filter_side_effect
 
@@ -95,14 +95,19 @@ class CartViewsUnitTests(unittest.TestCase):
     def test_cart_list_filters_by_user_param(self):
         carts = [make_cart_payload()]
         service_mock = Mock()
-        service_mock.list_carts.return_value = carts
+        service_mock.list_carts_with_auth.return_value = (carts, None)
         with patch.object(CartListView, "service", service_mock):
             request = self.factory.get("/api/carts/", {"userId": 5})
             self.authenticate(request, self._user(1, staff=True))
             response = self.dispatch(request, CartListView)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data, carts)
-        service_mock.list_carts.assert_called_once_with(user_id=5)
+        service_mock.list_carts_with_auth.assert_called_once_with(
+            actor_id=1,
+            is_privileged=True,
+            mode="filtered",
+            target_user_id=5,
+        )
 
     def test_cart_list_invalid_user_id_returns_validation_error(self):
         service_mock = Mock()
@@ -112,7 +117,7 @@ class CartViewsUnitTests(unittest.TestCase):
             response = self.dispatch(request, CartListView)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.data["error"]["code"], "VALIDATION_ERROR")
-        service_mock.list_carts.assert_not_called()
+        service_mock.list_carts_with_auth.assert_not_called()
 
     def test_cart_list_post_requires_authenticated_user_id(self):
         service_mock = Mock()
@@ -125,12 +130,12 @@ class CartViewsUnitTests(unittest.TestCase):
             response = self.dispatch(request, CartListView)
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.data["error"]["code"], "UNAUTHORIZED")
-        service_mock.get_or_create_cart.assert_not_called()
+        service_mock.create_cart_with_auth.assert_not_called()
 
     def test_cart_list_post_creates_cart_with_user_from_request(self):
         carts = make_cart_payload(cart_id=2, user_id=7)
         service_mock = Mock()
-        service_mock.get_or_create_cart.return_value = (carts, True)
+        service_mock.create_cart_with_auth.return_value = (carts, True, None)
         user = types.SimpleNamespace(
             id=7, is_authenticated=True, is_staff=False, is_superuser=False
         )
@@ -144,14 +149,16 @@ class CartViewsUnitTests(unittest.TestCase):
             response = self.dispatch(request, CartListView)
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["id"], 2)
-        args, _ = service_mock.get_or_create_cart.call_args
-        self.assertEqual(args[0], 7)
-        self.assertEqual(args[1]["products"][0]["product_id"], 1)
+        kwargs = service_mock.create_cart_with_auth.call_args.kwargs
+        self.assertEqual(kwargs["actor_id"], 7)
+        self.assertEqual(kwargs["target_user_id"], 7)
+        self.assertFalse(kwargs["is_privileged"])
+        self.assertEqual(kwargs["payload"]["products"][0]["product_id"], 1)
 
     def test_cart_list_post_admin_can_create_for_other_user(self):
         carts = make_cart_payload(cart_id=5, user_id=99)
         service_mock = Mock()
-        service_mock.get_or_create_cart.return_value = (carts, True)
+        service_mock.create_cart_with_auth.return_value = (carts, True, None)
         admin = types.SimpleNamespace(
             id=1, is_authenticated=True, is_staff=True, is_superuser=False
         )
@@ -164,15 +171,22 @@ class CartViewsUnitTests(unittest.TestCase):
             self.authenticate(request, admin)
             response = self.dispatch(request, CartListView)
         self.assertEqual(response.status_code, 201)
-        args, _ = service_mock.get_or_create_cart.call_args
-        self.assertEqual(args[0], 99)
-        self.assertNotIn("userId", args[1])
+        kwargs = service_mock.create_cart_with_auth.call_args.kwargs
+        self.assertEqual(kwargs["actor_id"], 1)
+        self.assertEqual(kwargs["target_user_id"], 99)
+        self.assertTrue(kwargs["is_privileged"])
+        self.assertEqual(kwargs["payload"]["products"][0]["product_id"], 2)
 
     def test_cart_list_post_non_admin_cannot_create_for_other_user(self):
         service_mock = Mock()
-        service_mock.get_or_create_cart.return_value = (
-            make_cart_payload(cart_id=6, user_id=3),
-            True,
+        service_mock.create_cart_with_auth.return_value = (
+            None,
+            None,
+            (
+                "FORBIDDEN",
+                "You do not have permission to create carts for other users",
+                {"userId": "9"},
+            ),
         )
         user = types.SimpleNamespace(
             id=3, is_authenticated=True, is_staff=False, is_superuser=False
@@ -184,7 +198,7 @@ class CartViewsUnitTests(unittest.TestCase):
             response = self.dispatch(request, CartListView)
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.data["error"]["code"], "FORBIDDEN")
-        service_mock.get_or_create_cart.assert_not_called()
+        service_mock.create_cart_with_auth.assert_not_called()
 
     def test_cart_list_post_returns_existing_when_cart_exists(self):
         service_mock = Mock()
@@ -192,7 +206,7 @@ class CartViewsUnitTests(unittest.TestCase):
             cart_id=10,
             user_id=5,
         )
-        service_mock.get_or_create_cart.return_value = (existing, False)
+        service_mock.create_cart_with_auth.return_value = (existing, False, None)
         user = types.SimpleNamespace(
             id=5, is_authenticated=True, is_staff=False, is_superuser=False
         )
@@ -202,13 +216,22 @@ class CartViewsUnitTests(unittest.TestCase):
             response = self.dispatch(request, CartListView)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["id"], 10)
-        service_mock.get_or_create_cart.assert_called_once_with(5, {"products": []})
+        kwargs = service_mock.create_cart_with_auth.call_args.kwargs
+        self.assertEqual(kwargs["actor_id"], 5)
+        self.assertEqual(kwargs["target_user_id"], 5)
+        self.assertFalse(kwargs["is_privileged"])
+        self.assertEqual(kwargs["payload"]["products"], [])
 
     def test_cart_list_post_for_staff_target_forbidden(self):
         service_mock = Mock()
-        service_mock.get_or_create_cart.return_value = (
-            make_cart_payload(cart_id=12, user_id=50),
-            True,
+        service_mock.create_cart_with_auth.return_value = (
+            None,
+            None,
+            (
+                "FORBIDDEN",
+                "Staff and admin accounts cannot own carts",
+                {"userId": "50"},
+            ),
         )
         self.user_flags[50] = {"id": 50, "is_staff": True, "is_superuser": False}
         admin = types.SimpleNamespace(
@@ -221,31 +244,40 @@ class CartViewsUnitTests(unittest.TestCase):
             response = self.dispatch(request, CartListView)
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.data["error"]["code"], "FORBIDDEN")
-        service_mock.get_or_create_cart.assert_not_called()
+        service_mock.create_cart_with_auth.assert_called_once()
 
     def test_cart_detail_get_not_found_returns_error(self):
         service_mock = Mock()
-        service_mock.get_cart.return_value = None
+        service_mock.get_cart_with_access.return_value = (
+            None,
+            ("NOT_FOUND", "Cart not found", {"id": "1"}),
+        )
         with patch.object(CartDetailView, "service", service_mock):
             request = self.factory.get("/api/carts/1/")
             self.authenticate(request, self._user(1))
             response = self.dispatch(request, CartDetailView, cart_id=1)
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.data["error"]["code"], "NOT_FOUND")
+        service_mock.get_cart_with_access.assert_called_once_with(1, 1, False)
 
     def test_cart_detail_get_success(self):
         service_mock = Mock()
         cart = make_cart_payload(cart_id=11, user_id=4)
-        service_mock.get_cart.return_value = cart
+        service_mock.get_cart_with_access.return_value = (cart, None)
         with patch.object(CartDetailView, "service", service_mock):
             request = self.factory.get("/api/carts/11/")
             self.authenticate(request, self._user(4))
             response = self.dispatch(request, CartDetailView, cart_id=11)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["id"], 11)
+        service_mock.get_cart_with_access.assert_called_once_with(11, 4, False)
 
     def test_cart_detail_put_requires_authenticated_user(self):
         service_mock = Mock()
+        service_mock.authorize_cart_mutation.return_value = (
+            None,
+            ("UNAUTHORIZED", "Authentication required", None),
+        )
         payload = {"items": []}
         user = types.SimpleNamespace(
             id=None, is_authenticated=True, is_staff=False, is_superuser=False
@@ -259,6 +291,10 @@ class CartViewsUnitTests(unittest.TestCase):
 
     def test_cart_detail_put_returns_not_found_when_service_returns_none(self):
         service_mock = Mock()
+        service_mock.authorize_cart_mutation.return_value = (
+            make_cart_payload(cart_id=1, user_id=9),
+            None,
+        )
         service_mock.update_cart.return_value = None
         user = types.SimpleNamespace(
             id=9, is_authenticated=True, is_staff=False, is_superuser=False
@@ -273,6 +309,10 @@ class CartViewsUnitTests(unittest.TestCase):
 
     def test_cart_detail_put_conflict_when_reassigning_to_user_with_cart(self):
         service_mock = Mock()
+        service_mock.authorize_cart_mutation.return_value = (
+            make_cart_payload(cart_id=2, user_id=9),
+            None,
+        )
         service_mock.update_cart.side_effect = CartAlreadyExistsError("exists")
         user = types.SimpleNamespace(
             id=9, is_authenticated=True, is_staff=True, is_superuser=False
@@ -287,6 +327,14 @@ class CartViewsUnitTests(unittest.TestCase):
 
     def test_cart_detail_put_forbidden_reassign_by_non_admin(self):
         service_mock = Mock()
+        service_mock.authorize_cart_mutation.return_value = (
+            None,
+            (
+                "FORBIDDEN",
+                "You do not have permission to reassign this cart",
+                {"userId": "10"},
+            ),
+        )
         user = types.SimpleNamespace(
             id=9, is_authenticated=True, is_staff=False, is_superuser=False
         )
@@ -300,6 +348,10 @@ class CartViewsUnitTests(unittest.TestCase):
 
     def test_cart_detail_put_success(self):
         service_mock = Mock()
+        service_mock.authorize_cart_mutation.return_value = (
+            make_cart_payload(cart_id=2, user_id=9),
+            None,
+        )
         updated = make_cart_payload(cart_id=2, user_id=9)
         service_mock.update_cart.return_value = updated
         user = types.SimpleNamespace(
@@ -315,6 +367,10 @@ class CartViewsUnitTests(unittest.TestCase):
 
     def test_cart_detail_put_admin_can_modify_other_cart(self):
         service_mock = Mock()
+        service_mock.authorize_cart_mutation.return_value = (
+            make_cart_payload(cart_id=2, user_id=9),
+            None,
+        )
         updated = make_cart_payload(cart_id=2, user_id=9)
         service_mock.update_cart.return_value = updated
         admin = types.SimpleNamespace(
@@ -333,6 +389,10 @@ class CartViewsUnitTests(unittest.TestCase):
 
     def test_cart_detail_patch_returns_error_when_missing(self):
         service_mock = Mock()
+        service_mock.authorize_cart_mutation.return_value = (
+            make_cart_payload(cart_id=1, user_id=4),
+            None,
+        )
         service_mock.patch_operations.return_value = None
         user = types.SimpleNamespace(
             id=4, is_authenticated=True, is_staff=False, is_superuser=False
@@ -347,6 +407,10 @@ class CartViewsUnitTests(unittest.TestCase):
 
     def test_cart_detail_patch_conflict_when_reassigning(self):
         service_mock = Mock()
+        service_mock.authorize_cart_mutation.return_value = (
+            make_cart_payload(cart_id=1, user_id=1),
+            None,
+        )
         service_mock.patch_operations.side_effect = CartAlreadyExistsError("exists")
         admin = types.SimpleNamespace(
             id=1, is_authenticated=True, is_staff=True, is_superuser=False
@@ -361,6 +425,10 @@ class CartViewsUnitTests(unittest.TestCase):
 
     def test_cart_detail_patch_forbidden_when_reassigning_to_staff(self):
         service_mock = Mock()
+        service_mock.authorize_cart_mutation.return_value = (
+            make_cart_payload(cart_id=1, user_id=1),
+            None,
+        )
         service_mock.patch_operations.side_effect = CartNotAllowedError(
             "Target user is not a customer"
         )
@@ -377,6 +445,14 @@ class CartViewsUnitTests(unittest.TestCase):
 
     def test_cart_detail_patch_forbidden_reassign_by_non_admin(self):
         service_mock = Mock()
+        service_mock.authorize_cart_mutation.return_value = (
+            None,
+            (
+                "FORBIDDEN",
+                "You do not have permission to reassign this cart",
+                {"userId": "7"},
+            ),
+        )
         user = types.SimpleNamespace(
             id=4, is_authenticated=True, is_staff=False, is_superuser=False
         )
@@ -390,6 +466,10 @@ class CartViewsUnitTests(unittest.TestCase):
 
     def test_cart_detail_patch_success(self):
         service_mock = Mock()
+        service_mock.authorize_cart_mutation.return_value = (
+            make_cart_payload(cart_id=1, user_id=4),
+            None,
+        )
         patched = make_cart_payload(cart_id=1, user_id=4)
         service_mock.patch_operations.return_value = patched
         user = types.SimpleNamespace(
@@ -405,6 +485,10 @@ class CartViewsUnitTests(unittest.TestCase):
 
     def test_cart_detail_patch_admin_on_other_cart(self):
         service_mock = Mock()
+        service_mock.authorize_cart_mutation.return_value = (
+            make_cart_payload(cart_id=1, user_id=7),
+            None,
+        )
         patched = make_cart_payload(cart_id=1, user_id=10)
         service_mock.patch_operations.return_value = patched
         admin = types.SimpleNamespace(
@@ -423,6 +507,10 @@ class CartViewsUnitTests(unittest.TestCase):
 
     def test_cart_detail_patch_requires_authentication(self):
         service_mock = Mock()
+        service_mock.authorize_cart_mutation.return_value = (
+            None,
+            ("UNAUTHORIZED", "Authentication required", None),
+        )
         payload = {"add": [{"product_id": 1, "quantity": 1}]}
         user = types.SimpleNamespace(
             id=None, is_authenticated=True, is_staff=False, is_superuser=False
@@ -436,6 +524,10 @@ class CartViewsUnitTests(unittest.TestCase):
 
     def test_cart_detail_delete_success(self):
         service_mock = Mock()
+        service_mock.authorize_cart_mutation.return_value = (
+            make_cart_payload(cart_id=1, user_id=3),
+            None,
+        )
         service_mock.delete_cart.return_value = True
         user = types.SimpleNamespace(
             id=3, is_authenticated=True, is_staff=False, is_superuser=False
@@ -449,6 +541,10 @@ class CartViewsUnitTests(unittest.TestCase):
 
     def test_cart_detail_delete_not_found(self):
         service_mock = Mock()
+        service_mock.authorize_cart_mutation.return_value = (
+            make_cart_payload(cart_id=1, user_id=3),
+            None,
+        )
         service_mock.delete_cart.return_value = False
         user = types.SimpleNamespace(
             id=3, is_authenticated=True, is_staff=False, is_superuser=False
@@ -462,6 +558,10 @@ class CartViewsUnitTests(unittest.TestCase):
 
     def test_cart_detail_delete_admin_other_cart(self):
         service_mock = Mock()
+        service_mock.authorize_cart_mutation.return_value = (
+            make_cart_payload(cart_id=9, user_id=1),
+            None,
+        )
         service_mock.delete_cart.return_value = True
         admin = types.SimpleNamespace(
             id=1, is_authenticated=True, is_staff=True, is_superuser=False
@@ -475,6 +575,10 @@ class CartViewsUnitTests(unittest.TestCase):
 
     def test_cart_detail_delete_requires_authentication(self):
         service_mock = Mock()
+        service_mock.authorize_cart_mutation.return_value = (
+            None,
+            ("UNAUTHORIZED", "Authentication required", None),
+        )
         user = types.SimpleNamespace(
             id=None, is_authenticated=True, is_staff=False, is_superuser=False
         )
@@ -488,26 +592,36 @@ class CartViewsUnitTests(unittest.TestCase):
     def test_cart_list_get_user_cart_for_owner(self):
         cart = make_cart_payload(cart_id=5, user_id=12)
         service_mock = Mock()
-        service_mock.get_or_create_cart.return_value = (cart, False)
+        service_mock.list_carts_with_auth.return_value = ([cart], None)
         with patch.object(CartListView, "service", service_mock):
             request = self.factory.get("/api/carts/", {"userId": 12})
             self.authenticate(request, self._user(12))
             response = self.dispatch(request, CartListView)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data, [cart])
-        service_mock.get_or_create_cart.assert_called_once_with(12)
+        service_mock.list_carts_with_auth.assert_called_once_with(
+            actor_id=12,
+            is_privileged=False,
+            mode="self",
+            target_user_id=12,
+        )
 
     def test_cart_list_get_user_cart_for_owner_creates_when_missing(self):
         cart = make_cart_payload(cart_id=6, user_id=15)
         service_mock = Mock()
-        service_mock.get_or_create_cart.return_value = (cart, True)
+        service_mock.list_carts_with_auth.return_value = ([cart], None)
         with patch.object(CartListView, "service", service_mock):
             request = self.factory.get("/api/carts/", {"userId": 15})
             self.authenticate(request, self._user(15))
             response = self.dispatch(request, CartListView)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data, [cart])
-        service_mock.get_or_create_cart.assert_called_once_with(15)
+        service_mock.list_carts_with_auth.assert_called_once_with(
+            actor_id=15,
+            is_privileged=False,
+            mode="self",
+            target_user_id=15,
+        )
 
     def test_cart_list_get_user_cart_forbidden_for_other_user(self):
         service_mock = Mock()
@@ -517,7 +631,7 @@ class CartViewsUnitTests(unittest.TestCase):
             response = self.dispatch(request, CartListView)
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.data["error"]["code"], "FORBIDDEN")
-        service_mock.get_or_create_cart.assert_not_called()
+        service_mock.list_carts_with_auth.assert_not_called()
 
     def test_cart_list_get_user_cart_requires_authentication(self):
         service_mock = Mock()
@@ -530,4 +644,4 @@ class CartViewsUnitTests(unittest.TestCase):
             response = self.dispatch(request, CartListView)
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.data["error"]["code"], "UNAUTHORIZED")
-        service_mock.get_or_create_cart.assert_not_called()
+        service_mock.list_carts_with_auth.assert_not_called()

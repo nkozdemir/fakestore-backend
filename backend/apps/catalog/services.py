@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from typing import Optional, Dict, Any, Union
+from typing import Optional, Dict, Any, Union, Type
 
 from django.db import transaction
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.response import Response
 
 from apps.common import get_logger
 from .mappers import ProductMapper, CategoryMapper
@@ -78,6 +80,30 @@ class ProductService:
         data = ProductMapper.many_to_dto(qs)
         self.cache.set(key, data)
         return data
+
+    def list_products_paginated(
+        self,
+        request,
+        *,
+        category: Optional[str] = None,
+        paginator_class: Optional[Type[PageNumberPagination]] = None,
+        serializer_class=None,
+        view=None,
+    ):
+        paginator_cls = paginator_class or PageNumberPagination
+        queryset = self.products_queryset(category=category)
+        paginator = paginator_cls()
+        page = paginator.paginate_queryset(queryset, request, view=view)
+        data_source = page if page is not None else queryset
+        dtos = ProductMapper.many_to_dto(data_source)
+        if serializer_class is None:
+            from .serializers import ProductReadSerializer  # Avoid circular import
+
+            serializer_class = ProductReadSerializer
+        serializer = serializer_class(dtos, many=True)
+        if page is None:
+            return Response(serializer.data)
+        return paginator.get_paginated_response(serializer.data)
 
     def products_queryset(self, category: Optional[str] = None):
         """Return a queryset for products with categories prefetched."""
@@ -181,19 +207,24 @@ class ProductService:
         self.logger.info("Product updated", product_id=product_id)
         return ProductMapper.to_dto(product)
 
-    def delete_product(self, product_id: int) -> bool:
+    def delete_product_with_auth(
+        self, product_id: int
+    ) -> Tuple[bool, Optional[Tuple[str, str, Optional[Dict[str, Any]]]]]:
         self.logger.info("Deleting product", product_id=product_id)
         product = self.products.get(id=product_id)
         if not product:
             self.logger.warning(
                 "Product deletion failed: not found", product_id=product_id
             )
-            return False
+            return False, ("NOT_FOUND", "Product not found", {"id": str(product_id)})
         self.products.delete(product)
-        # Invalidate cache after deletion
         self._bump_cache_version()
         self.logger.info("Product deleted", product_id=product_id)
-        return True
+        return True, None
+
+    def delete_product(self, product_id: int) -> bool:
+        deleted, _ = self.delete_product_with_auth(product_id)
+        return deleted
 
     # Rating related methods
     def get_rating_summary(self, product_id: int, user_id: Optional[int] = None):
@@ -421,6 +452,12 @@ class CategoryService:
         self.logger.info("Category created", category_id=category.id)
         return CategoryMapper.to_dto(category)
 
+    def create_category_with_auth(
+        self, data: Dict[str, Any]
+    ) -> Tuple[Any, Optional[Tuple[str, str, Optional[Dict[str, Any]]]]]:
+        dto = self.create_category(data)
+        return dto, None
+
     def update_category(self, category_id: int, data: Dict[str, Any]):
         self.logger.info("Updating category", category_id=category_id)
         category: Optional[Category] = self.categories.get(id=category_id)
@@ -434,6 +471,21 @@ class CategoryService:
         category.save()
         self.logger.info("Category updated", category_id=category_id)
         return CategoryMapper.to_dto(category)
+
+    def update_category_with_auth(
+        self, category_id: int, data: Dict[str, Any]
+    ) -> Tuple[Optional[Any], Optional[Tuple[str, str, Optional[Dict[str, Any]]]]]:
+        dto = self.update_category(category_id, data)
+        if not dto:
+            return (
+                None,
+                (
+                    "NOT_FOUND",
+                    "Category not found",
+                    {"id": str(category_id)},
+                ),
+            )
+        return dto, None
 
     def delete_category(self, category_id: int) -> bool:
         self.logger.info("Deleting category", category_id=category_id)
@@ -450,3 +502,11 @@ class CategoryService:
         self.categories.delete(category)
         self.logger.info("Category deleted", category_id=category_id)
         return True
+
+    def delete_category_with_auth(
+        self, category_id: int
+    ) -> Tuple[bool, Optional[Tuple[str, str, Optional[Dict[str, Any]]]]]:
+        deleted = self.delete_category(category_id)
+        if not deleted:
+            return False, ("NOT_FOUND", "Category not found", {"id": str(category_id)})
+        return True, None
