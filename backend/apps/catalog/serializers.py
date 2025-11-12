@@ -1,10 +1,56 @@
+from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
+
+from apps.common.i18n import iter_supported_languages
+
 from .dtos import ProductDTO, CategoryDTO
+
+SUPPORTED_LANGUAGE_CODES = tuple(iter_supported_languages())
+
+
+def _normalize_language_value(value: str) -> str:
+    normalized = str(value or "").split("-")[0].lower()
+    if normalized not in SUPPORTED_LANGUAGE_CODES:
+        allowed = ", ".join(SUPPORTED_LANGUAGE_CODES)
+        raise serializers.ValidationError(
+            _("Unsupported language code '%(value)s'. Allowed: %(allowed)s")
+            % {"value": value, "allowed": allowed}
+        )
+    return normalized
+
+
+class BaseTranslationInputSerializer(serializers.Serializer):
+    language = serializers.CharField()
+
+    def validate_language(self, value):
+        return _normalize_language_value(value)
+
+
+class CategoryTranslationInputSerializer(BaseTranslationInputSerializer):
+    name = serializers.CharField()
+
+
+class ProductTranslationInputSerializer(BaseTranslationInputSerializer):
+    title = serializers.CharField(required=False, allow_blank=False)
+    description = serializers.CharField(required=False, allow_blank=False)
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if not attrs.get("title") and not attrs.get("description"):
+            raise serializers.ValidationError(
+                _(
+                    "Provide at least a title or description for each translation entry."
+                )
+            )
+        return attrs
 
 
 class CategorySerializer(serializers.Serializer):
     id = serializers.IntegerField(read_only=True)
     name = serializers.CharField()
+    translations = CategoryTranslationInputSerializer(
+        many=True, required=False, write_only=True
+    )
 
     def to_representation(self, instance):
         # Support dataclass DTO or dict
@@ -62,6 +108,9 @@ class ProductWriteSerializer(serializers.Serializer):
     rate = serializers.FloatField(required=False)
     count = serializers.IntegerField(required=False)
     categories = serializers.ListField(child=serializers.IntegerField(), required=False)
+    translations = ProductTranslationInputSerializer(
+        many=True, required=False, write_only=True
+    )
 
 
 class ProductRatingUserSerializer(serializers.Serializer):

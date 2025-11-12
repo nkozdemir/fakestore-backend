@@ -1,6 +1,7 @@
 from collections.abc import Mapping
 from typing import Any, Dict, Optional
 
+from django.utils.translation import gettext as _
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
@@ -86,10 +87,12 @@ def error_response(
     if not 100 <= status_code <= 599:
         raise ValueError("error_response status must be a valid HTTP status code")
 
+    localized_message = _(message)
+
     payload: Dict[str, Any] = {
         "error": {
             "code": normalized_code,
-            "message": message,
+            "message": localized_message,
             "status": status_code,
         }
     }

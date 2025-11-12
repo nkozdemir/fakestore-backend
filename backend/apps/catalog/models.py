@@ -1,6 +1,10 @@
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
+
 from apps.users.models import User
+
+LANGUAGE_CHOICES = getattr(settings, "LANGUAGES", [("en", "English")])
 
 
 class Category(models.Model):
@@ -67,3 +71,46 @@ class ProductCategory(models.Model):
         indexes = [
             models.Index(fields=["product", "category"], name="prod_cat_combo_idx"),
         ]
+
+
+class CategoryTranslation(models.Model):
+    category = models.ForeignKey(
+        Category, related_name="translations", on_delete=models.CASCADE
+    )
+    language = models.CharField(max_length=10, choices=LANGUAGE_CHOICES)
+    name = models.CharField(max_length=100)
+
+    class Meta:
+        unique_together = ("category", "language")
+        verbose_name = "Category translation"
+        verbose_name_plural = "Category translations"
+        indexes = [
+            models.Index(
+                fields=["language"], name="category_translation_lang_idx"
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.category_id}:{self.language}"
+
+
+class ProductTranslation(models.Model):
+    product = models.ForeignKey(
+        Product, related_name="translations", on_delete=models.CASCADE
+    )
+    language = models.CharField(max_length=10, choices=LANGUAGE_CHOICES)
+    title = models.CharField(max_length=255)
+    description = models.TextField()
+
+    class Meta:
+        unique_together = ("product", "language")
+        verbose_name = "Product translation"
+        verbose_name_plural = "Product translations"
+        indexes = [
+            models.Index(
+                fields=["language"], name="product_translation_lang_idx"
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.product_id}:{self.language}"

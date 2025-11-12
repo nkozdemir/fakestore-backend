@@ -6,6 +6,16 @@ class CategoryRepository(GenericRepository[Category]):
     def __init__(self):
         super().__init__(Category)
 
+    def list(self, **filters):  # type: ignore[override]
+        return self.model.objects.filter(**filters).prefetch_related("translations")
+
+    def get(self, **filters):  # type: ignore[override]
+        return (
+            self.model.objects.filter(**filters)
+            .prefetch_related("translations")
+            .first()
+        )
+
     def detach_from_products(self, category: Category):
         """
         Remove relationships between the category and any products before deletion.
@@ -19,12 +29,23 @@ class ProductRepository(GenericRepository[Product]):
 
     def list(self, **filters):  # type: ignore[override]
         """Return products with categories prefetched to avoid N+1 during DTO mapping."""
-        return self.model.objects.filter(**filters).prefetch_related("categories")
+        return (
+            self.model.objects.filter(**filters)
+            .prefetch_related("translations", "categories", "categories__translations")
+        )
 
     def list_by_category(self, category_name: str):
-        return self.model.objects.filter(
-            categories__name=category_name
-        ).prefetch_related("categories")
+        return (
+            self.model.objects.filter(categories__name=category_name)
+            .prefetch_related("translations", "categories", "categories__translations")
+        )
+
+    def get(self, **filters):  # type: ignore[override]
+        return (
+            self.model.objects.filter(**filters)
+            .prefetch_related("translations", "categories", "categories__translations")
+            .first()
+        )
 
     # --- Helper methods for service orchestration ---
     def set_categories(self, product: Product, category_ids):

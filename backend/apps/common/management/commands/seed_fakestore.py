@@ -215,6 +215,136 @@ PRODUCTS = [
     ),
 ]
 
+CATEGORY_TRANSLATIONS = {
+    "men's clothing": {"tr": "Erkek Giyim"},
+    "women's clothing": {"tr": "Kadın Giyim"},
+    "electronics": {"tr": "Elektronik"},
+    "jewelery": {"tr": "Takı"},
+}
+
+PRODUCT_TRANSLATIONS = {
+    1: {
+        "tr": {
+            "title": 'Fjallraven - Foldsack No. 1 Sırt Çantası, 15" Laptop Uyumlu',
+            "description": "Günlük kullanım ve doğa yürüyüşleri için ideal sırt çantası. 15 inçe kadar dizüstünü dolgulu bölmeye güvenle yerleştirip eşyalarını düzenli tutabilirsin.",
+        }
+    },
+    2: {
+        "tr": {
+            "title": "Erkek Rahat Premium Slim Fit Tişört",
+            "description": "Kontrast raglan kollu, üç düğmeli henley yaka ve nefes alan hafif kumaşla konfor sunar. Sağlam dikişleri günlük stil ve beyzbol tutkunları için mükemmeldir.",
+        }
+    },
+    3: {
+        "tr": {
+            "title": "Erkek Pamuklu Ceket",
+            "description": "İlkbahar, sonbahar ve kış ayları için dış giyim alternatifi. İş, yürüyüş, kamp ve seyahat gibi birçok aktivitede sıcak ve dayanıklı kalır.",
+        }
+    },
+    4: {
+        "tr": {
+            "title": "Erkek Rahat Slim Fit Gömlek",
+            "description": "Ekranla gerçek ürün arasında ton farkı olabilir; ölçü tablosunu inceleyin. Dar kesim formu günlük kombinler için şık ve sade bir görünüm sağlar.",
+        }
+    },
+    5: {
+        "tr": {
+            "title": "John Hardy Kadın Legends Naga Altın ve Gümüş Bileklik",
+            "description": "Naga su ejderhasından ilham alan tasarım; içe takıldığında sevgi ve bolluk, dışa takıldığında koruma simgeler. El işçiliği detaylarıyla koleksiyon parçaları arasındadır.",
+        }
+    },
+    6: {
+        "tr": {
+            "title": "Solid Gold Petite Micropave Bileklik",
+            "description": "Hafif parıltılı mikro taşlarla süslenen zarif tasarım. 30 gün içinde iade veya değişim garantisi sunar ve özel gün kombinlerini tamamlar.",
+        }
+    },
+    7: {
+        "tr": {
+            "title": "Beyaz Altın Kaplama Prenses Yüzük",
+            "description": "Klasik tektaş görünümüyle nişan, yıl dönümü ve özel kutlamalarda sevdiğinizi şımartır. Şık kutusuyla hediye vermeye hazır gelir.",
+        }
+    },
+    8: {
+        "tr": {
+            "title": "Pierced Owl Gül Altın Kaplama Çift Tünel Küpe",
+            "description": "316L paslanmaz çelikten üretilen flarlı tünel küpeler dayanıklı ve hipoalerjeniktir. Gül altın kaplama parlak bir dokunuş katar.",
+        }
+    },
+    9: {
+        "tr": {
+            "title": "WD 2TB Elements Taşınabilir Harici Disk - USB 3.0",
+            "description": "USB 3.0/2.0 uyumlu, hızlı veri transferi ve yüksek kapasite sunar. NTFS formatlıdır; diğer sistemler için yeniden formatlamak gerekebilir.",
+        }
+    },
+    10: {
+        "tr": {
+            "title": "SanDisk SSD PLUS 1TB Dahili SSD - SATA III 6 Gb/s",
+            "description": "Bilgisayarı hızlı açıp kapatır, uygulamaları çabuk yükler. 535MB/s okuma ve 450MB/s yazma hızlarıyla günlük iş yükleri için idealdir.",
+        }
+    },
+    11: {
+        "tr": {
+            "title": "Silicon Power 256GB SSD 3D NAND A55",
+            "description": "3D NAND ve SLC önbellek teknolojisi yüksek hız ve uzun ömür sağlar. 7 mm ince tasarım ultrabook'larla uyumludur.",
+        }
+    },
+    12: {
+        "tr": {
+            "title": "WD 4TB Gaming Drive PS4 Uyumlu Harici Disk",
+            "description": "PS4 depolama alanını saniyeler içinde genişletir. Şık ve taşınabilir gövdesiyle oyunlarını gittiğin her yere götürebilirsin.",
+        }
+    },
+    13: {
+        "tr": {
+            "title": 'Acer SB220Q bi 21.5" Full HD IPS Ultra İnce Monitör',
+            "description": "21,5 inç IPS panel, 75Hz yenileme hızı ve sıfır çerçeve tasarım sunar. Radeon FreeSync desteği yırtılmaları azaltır.",
+        }
+    },
+    14: {
+        "tr": {
+            "title": 'Samsung 49" CHG90 144Hz Kavisli QLED Oyun Monitörü',
+            "description": "Dual 27\" eşdeğer süper ultra geniş ekran, QLED renkler ve HDR desteği ile sürükleyici deneyim sunar. 144Hz/1ms değerleri hızlı oyunlar için idealdir.",
+        }
+    },
+    15: {
+        "tr": {
+            "title": "BIYLACLESEN Kadın 3'ü 1 Arada Snowboard Montu",
+            "description": "100% polyester dış yüzey ve çıkarılabilir sıcak astar ile mevsime göre uyarlanır. Ayarlanabilir kapüşon ve manşetler rüzgar ve soğuğu keser.",
+        }
+    },
+    16: {
+        "tr": {
+            "title": "Lock and Love Kadın Çıkarılabilir Kapüşonlu Deri Ceket",
+            "description": "PU deri dış yüzey ve pamuk karışımlı kapüşon kombinasyonu stil ve konforu birleştirir. Ön cebi ve bel detayları modern görünüm sunar.",
+        }
+    },
+    17: {
+        "tr": {
+            "title": "Çizgili Kadın Yağmurluk Rüzgarlık",
+            "description": "Hafif ve paketlenebilir yapı seyahat veya günlük kullanımda rahatlık sağlar. Ayarlanabilir bel ve geniş kapüşon ekstra koruma sunar.",
+        }
+    },
+    18: {
+        "tr": {
+            "title": "MBJ Kadın Kısa Kollu Kayık Yaka Tişört",
+            "description": "95% rayon, 5% spandeks kumaş yumuşak ve esnektir. Kollar ve yakadaki ribana detay konforu artırır ve formu korur.",
+        }
+    },
+    19: {
+        "tr": {
+            "title": "Opna Kadın Kısa Kollu Nemi Emici Tişört",
+            "description": "Cationic polyester interlock kumaş teri hızla uzaklaştırır, hafif ve nefes alır. Slim fit V yaka sportif ve feminen görünüm sunar.",
+        }
+    },
+    20: {
+        "tr": {
+            "title": "DANVOUY Kadın Günlük Pamuklu Tişört",
+            "description": "95% pamuk, 5% spandeks karışımı yumuşak ve esnektir. Harf baskılı V yaka tasarım ofisten plaja pek çok ortamda kullanılabilir.",
+        }
+    },
+}
+
 USERS = [
     {
         "id": 1,
@@ -373,6 +503,13 @@ class Command(BaseCommand):
         name_to_cat = {}
         for name in CATEGORIES:
             cat, _ = Category.objects.get_or_create(name=name)
+            cat.translations.update_or_create(
+                language="en", defaults={"name": cat.name}
+            )
+            for lang, localized in CATEGORY_TRANSLATIONS.get(name, {}).items():
+                cat.translations.update_or_create(
+                    language=lang, defaults={"name": localized}
+                )
             name_to_cat[name] = cat
 
         self.stdout.write("Seeding products...")
@@ -388,6 +525,22 @@ class Command(BaseCommand):
                     count=count,
                 ),
             )
+            product.translations.update_or_create(
+                language="en",
+                defaults={
+                    "title": product.title,
+                    "description": product.description,
+                },
+            )
+            localized = PRODUCT_TRANSLATIONS.get(pid, {})
+            for lang, payload in localized.items():
+                product.translations.update_or_create(
+                    language=lang,
+                    defaults={
+                        "title": payload.get("title", product.title),
+                        "description": payload.get("description", product.description),
+                    },
+                )
             for cname in cat_names:
                 ProductCategory.objects.get_or_create(
                     product=product, category=name_to_cat[cname]

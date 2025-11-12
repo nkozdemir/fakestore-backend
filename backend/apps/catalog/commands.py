@@ -1,6 +1,44 @@
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
+
+from apps.common.i18n import iter_supported_languages
+
+SUPPORTED_LANG_CODES = {code for code in iter_supported_languages()}
+
+
+def _normalize_language(language: Any) -> Optional[str]:
+    if not language:
+        return None
+    normalized = str(language).split("-")[0].lower()
+    if normalized in SUPPORTED_LANG_CODES:
+        return normalized
+    return None
+
+
+def _normalize_translation_entries(
+    raw_entries, allowed_fields: List[str], *, require_any: bool = True
+) -> List[Dict[str, Any]]:
+    cleaned: List[Dict[str, Any]] = []
+    if not raw_entries:
+        return cleaned
+    for entry in raw_entries:
+        if not isinstance(entry, dict):
+            continue
+        language = _normalize_language(entry.get("language"))
+        if not language:
+            continue
+        values = {
+            field: entry.get(field)
+            for field in allowed_fields
+            if entry.get(field) is not None and entry.get(field) != ""
+        }
+        if require_any and not values:
+            continue
+        cleaned_entry = {"language": language}
+        cleaned_entry.update(values)
+        cleaned.append(cleaned_entry)
+    return cleaned
 
 
 # Product Commands
@@ -13,6 +51,7 @@ class ProductCreateCommand:
     categories: List[int] = field(default_factory=list)
     rate: Optional[float] = None
     count: Optional[int] = None
+    translations: List[Dict[str, Any]] = field(default_factory=list)
 
     @staticmethod
     def _parse_categories(raw):
@@ -31,6 +70,9 @@ class ProductCreateCommand:
         data = dict(payload or {})
         # ignore id if present
         data.pop("id", None)
+        translations = _normalize_translation_entries(
+            data.get("translations"), ["title", "description"]
+        )
         return ProductCreateCommand(
             title=str(data.get("title", "")).strip(),
             price=str(data.get("price", "0")).strip(),
@@ -41,6 +83,7 @@ class ProductCreateCommand:
             ),
             rate=data.get("rate"),
             count=data.get("count"),
+            translations=translations,
         )
 
 
@@ -55,6 +98,7 @@ class ProductUpdateCommand:
     categories: Optional[List[int]] = None
     rate: Optional[float] = None
     count: Optional[int] = None
+    translations: Optional[List[Dict[str, Any]]] = None
 
     @staticmethod
     def from_raw(product_id: int, payload: Dict[str, Any], partial: bool):
@@ -63,6 +107,11 @@ class ProductUpdateCommand:
         cats = None
         if "categories" in data:
             cats = ProductCreateCommand._parse_categories(data.get("categories") or [])
+        translations = None
+        if "translations" in data:
+            translations = _normalize_translation_entries(
+                data.get("translations"), ["title", "description"]
+            )
         return ProductUpdateCommand(
             product_id=product_id,
             partial=partial,
@@ -73,6 +122,7 @@ class ProductUpdateCommand:
             categories=cats,
             rate=data.get("rate") if "rate" in data else None,
             count=data.get("count") if "count" in data else None,
+            translations=translations,
         )
 
 

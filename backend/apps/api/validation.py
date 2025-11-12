@@ -2,6 +2,7 @@ import json
 from typing import Any, Dict, Optional
 
 from django.http import HttpRequest
+from django.utils.translation import gettext as _
 from rest_framework.exceptions import AuthenticationFailed as DRFAuthenticationFailed
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import InvalidToken
@@ -110,10 +111,10 @@ def _resolve_rating_user(
 
 def _rating_override_forbidden_message(method: str) -> str:
     if method == "GET":
-        return "You do not have permission to view ratings for other users"
+        return _("You do not have permission to view ratings for other users")
     if method == "POST":
-        return "You do not have permission to rate on behalf of other users"
-    return "You do not have permission to manage ratings for other users"
+        return _("You do not have permission to rate on behalf of other users")
+    return _("You do not have permission to manage ratings for other users")
 
 
 def _apply_rating_user_override(

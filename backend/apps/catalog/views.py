@@ -11,6 +11,7 @@ from .serializers import (
     ProductRatingsListSerializer,
 )
 from apps.api.utils import error_response
+from apps.common.i18n import resolve_language
 from .pagination import ProductListPagination
 from apps.common import get_logger
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse
@@ -42,6 +43,7 @@ class ProductListView(APIView):
     )
     def get(self, request):
         category = request.query_params.get("category")
+        language = resolve_language(request)
         self.log.debug("Handling product list request", category=category)
         return self.service.list_products_paginated(
             request,
@@ -49,6 +51,7 @@ class ProductListView(APIView):
             paginator_class=ProductListPagination,
             serializer_class=ProductReadSerializer,
             view=self,
+            language=language,
         )
 
     @extend_schema(
@@ -60,12 +63,15 @@ class ProductListView(APIView):
         },
     )
     def post(self, request):
+        language = resolve_language(request)
         serializer = ProductWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.log.info(
             "Creating product via API", title=serializer.validated_data.get("title")
         )
-        dto = self.service.create_product(serializer.validated_data)
+        dto = self.service.create_product(
+            serializer.validated_data, language=language
+        )
         out = ProductReadSerializer(dto).data
         product_id = getattr(dto, "id", None)
         if product_id is None and isinstance(dto, dict):
@@ -90,8 +96,9 @@ class ProductDetailView(APIView):
         },
     )
     def get(self, request, product_id: int):
+        language = resolve_language(request)
         self.log.debug("Fetching product detail", product_id=product_id)
-        dto = self.service.get_product(product_id)
+        dto = self.service.get_product(product_id, language=language)
         if not dto:
             self.log.info("Product not found", product_id=product_id)
             return error_response(
@@ -109,11 +116,15 @@ class ProductDetailView(APIView):
         },
     )
     def put(self, request, product_id: int):
+        language = resolve_language(request)
         serializer = ProductWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.log.info("Replacing product", product_id=product_id)
         dto = self.service.update_product(
-            product_id, serializer.validated_data, partial=False
+            product_id,
+            serializer.validated_data,
+            partial=False,
+            language=language,
         )
         if not dto:
             self.log.warning("Product replace failed: not found", product_id=product_id)
@@ -131,11 +142,15 @@ class ProductDetailView(APIView):
         },
     )
     def patch(self, request, product_id: int):
+        language = resolve_language(request)
         self.log.info("Patching product", product_id=product_id)
         serializer = ProductWriteSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         dto = self.service.update_product(
-            product_id, serializer.validated_data, partial=True
+            product_id,
+            serializer.validated_data,
+            partial=True,
+            language=language,
         )
         if not dto:
             self.log.info("Product patch failed: not found", product_id=product_id)
@@ -167,8 +182,9 @@ class CategoryListView(APIView):
         summary="List categories", responses={200: CategorySerializer(many=True)}
     )
     def get(self, request):
+        language = resolve_language(request)
         self.log.debug("Listing categories")
-        data = self.service.list_categories()
+        data = self.service.list_categories(language=language)
         return Response(CategorySerializer(data, many=True).data)
 
     @extend_schema(
@@ -180,9 +196,12 @@ class CategoryListView(APIView):
         },
     )
     def post(self, request):
+        language = resolve_language(request)
         serializer = CategorySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        dto, error = self.service.create_category_with_auth(serializer.validated_data)
+        dto, error = self.service.create_category_with_auth(
+            serializer.validated_data, language=language
+        )
         if error:
             code, message, details = error
             return error_response(code, message, details)
@@ -208,8 +227,9 @@ class CategoryDetailView(APIView):
         },
     )
     def get(self, request, category_id: int):
+        language = resolve_language(request)
         self.log.debug("Fetching category detail", category_id=category_id)
-        dto = self.service.get_category(category_id)
+        dto = self.service.get_category(category_id, language=language)
         if not dto:
             self.log.info("Category not found", category_id=category_id)
             return error_response(
@@ -227,11 +247,12 @@ class CategoryDetailView(APIView):
         },
     )
     def put(self, request, category_id: int):
+        language = resolve_language(request)
         serializer = CategorySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.log.info("Replacing category", category_id=category_id)
         dto, error = self.service.update_category_with_auth(
-            category_id, serializer.validated_data
+            category_id, serializer.validated_data, language=language
         )
         if error:
             code, message, details = error
@@ -248,11 +269,12 @@ class CategoryDetailView(APIView):
         },
     )
     def patch(self, request, category_id: int):
+        language = resolve_language(request)
         serializer = CategorySerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         self.log.info("Patching category", category_id=category_id)
         dto, error = self.service.update_category_with_auth(
-            category_id, serializer.validated_data
+            category_id, serializer.validated_data, language=language
         )
         if error:
             code, message, details = error

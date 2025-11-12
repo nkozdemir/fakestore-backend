@@ -66,6 +66,7 @@ class CatalogViewsUnitTests(unittest.TestCase):
         self.assertEqual(kwargs["category"], "electronics")
         self.assertIs(kwargs["paginator_class"], ProductListPagination)
         self.assertIs(kwargs["serializer_class"], ProductReadSerializer)
+        self.assertEqual(kwargs["language"], "en")
         self.assertEqual(kwargs["view"].__class__, ProductListView)
 
     def test_product_list_post_creates_product(self):
@@ -90,6 +91,7 @@ class CatalogViewsUnitTests(unittest.TestCase):
         args, kwargs = service_mock.create_product.call_args
         self.assertEqual(args[0]["title"], "Created")
         self.assertEqual(args[0]["price"], Decimal("12.50"))
+        self.assertEqual(kwargs["language"], "en")
 
     def test_product_list_post_forbidden_for_non_admin(self):
         service_mock = Mock()

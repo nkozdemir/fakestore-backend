@@ -7,6 +7,7 @@ from django.core.exceptions import (
     ValidationError as DjangoValidationError,
 )
 from django.http import Http404
+from django.utils.translation import gettext_lazy as _
 from rest_framework import status
 from rest_framework.exceptions import (
     AuthenticationFailed,
@@ -27,31 +28,31 @@ from apps.common import get_logger
 logger = get_logger(__name__).bind(component="api", layer="exception")
 
 STATUS_CODE_DEFAULTS: Dict[int, Tuple[str, str]] = {
-    status.HTTP_400_BAD_REQUEST: ("VALIDATION_ERROR", "Validation failed"),
-    status.HTTP_401_UNAUTHORIZED: ("UNAUTHORIZED", "Authentication required"),
+    status.HTTP_400_BAD_REQUEST: ("VALIDATION_ERROR", _("Validation failed")),
+    status.HTTP_401_UNAUTHORIZED: ("UNAUTHORIZED", _("Authentication required")),
     status.HTTP_403_FORBIDDEN: (
         "FORBIDDEN",
-        "You do not have permission to perform this action",
+        _("You do not have permission to perform this action"),
     ),
-    status.HTTP_404_NOT_FOUND: ("NOT_FOUND", "Resource not found"),
-    status.HTTP_405_METHOD_NOT_ALLOWED: ("METHOD_NOT_ALLOWED", "Method not allowed"),
-    status.HTTP_409_CONFLICT: ("CONFLICT", "Resource conflict"),
+    status.HTTP_404_NOT_FOUND: ("NOT_FOUND", _("Resource not found")),
+    status.HTTP_405_METHOD_NOT_ALLOWED: ("METHOD_NOT_ALLOWED", _("Method not allowed")),
+    status.HTTP_409_CONFLICT: ("CONFLICT", _("Resource conflict")),
     status.HTTP_415_UNSUPPORTED_MEDIA_TYPE: (
         "UNSUPPORTED_MEDIA_TYPE",
-        "Unsupported media type",
+        _("Unsupported media type"),
     ),
     status.HTTP_422_UNPROCESSABLE_ENTITY: (
         "UNPROCESSABLE_ENTITY",
-        "Unprocessable entity",
+        _("Unprocessable entity"),
     ),
-    status.HTTP_429_TOO_MANY_REQUESTS: ("TOO_MANY_REQUESTS", "Request was throttled"),
+    status.HTTP_429_TOO_MANY_REQUESTS: ("TOO_MANY_REQUESTS", _("Request was throttled")),
     status.HTTP_500_INTERNAL_SERVER_ERROR: (
         "SERVER_ERROR",
-        "Something went wrong",
+        _("Something went wrong"),
     ),
     status.HTTP_503_SERVICE_UNAVAILABLE: (
         "SERVICE_UNAVAILABLE",
-        "Service temporarily unavailable",
+        _("Service temporarily unavailable"),
     ),
 }
 

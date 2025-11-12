@@ -1,12 +1,18 @@
 from __future__ import annotations
 
-from typing import Optional, Dict, Any, Union, Type
+from typing import Any, Dict, List, Optional, Type, Union
 
 from django.db import transaction
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
 from apps.common import get_logger
+from apps.common.i18n import (
+    get_default_language,
+    is_supported_language,
+    iter_supported_languages,
+    normalize_language_code,
+)
 from .mappers import ProductMapper, CategoryMapper
 from .models import Product, Category, Rating
 from .commands import ProductCreateCommand, ProductUpdateCommand, RatingSetCommand
@@ -38,6 +44,15 @@ class ProductService:
         self._cache_prefix = "products:list"
         self._cache_version_key = f"{self._cache_prefix}:version"
         self._default_version = 1
+        self._default_language = get_default_language()
+        self._supported_languages = tuple(iter_supported_languages())
+
+    def _normalize_language(self, language: Optional[str]) -> str:
+        if language:
+            normalized = language.split("-")[0].lower()
+            if normalized in self._supported_languages:
+                return normalized
+        return self._default_language
 
     def _get_cache_version(self) -> int:
         v = self.cache.get(self._cache_version_key)
@@ -49,14 +64,20 @@ class ProductService:
         self.cache.set(self._cache_version_key, v + 1, timeout=None)
         self.logger.debug("Bumped product cache version", new_version=v + 1)
 
-    def _cache_key(self, category: Optional[str]) -> str:
+    def _cache_key(self, category: Optional[str], language: str) -> str:
         version = self._get_cache_version()
         cat = category or "all"
-        return f"{self._cache_prefix}:v{version}:{cat}"
+        return f"{self._cache_prefix}:v{version}:{cat}:lang-{language}"
 
-    def list_products(self, category: Optional[str] = None):
+    def list_products(
+        self, category: Optional[str] = None, *, language: Optional[str] = None
+    ):
+        language = self._normalize_language(language)
         self.logger.debug(
-            "Listing products", category=category, cache_enabled=not self.disable_cache
+            "Listing products",
+            category=category,
+            cache_enabled=not self.disable_cache,
+            language=language,
         )
         if self.disable_cache:
             qs = (
@@ -64,20 +85,20 @@ class ProductService:
                 if category
                 else self.products.list()
             )
-            return ProductMapper.many_to_dto(qs)
+            return ProductMapper.many_to_dto(qs, language=language)
         # Read-through cache per category filter
-        key = self._cache_key(category)
+        key = self._cache_key(category, language)
         cached = self.cache.get(key)
         if cached is not None:
             self.logger.debug("Product list cache hit", cache_key=key)
             return cached
         self.logger.debug("Product list cache miss", cache_key=key)
         qs = (
-            self.products.list_by_category(category)
-            if category
-            else self.products.list()
+                self.products.list_by_category(category)
+                if category
+                else self.products.list()
         )
-        data = ProductMapper.many_to_dto(qs)
+        data = ProductMapper.many_to_dto(qs, language=language)
         self.cache.set(key, data)
         return data
 
@@ -89,13 +110,15 @@ class ProductService:
         paginator_class: Optional[Type[PageNumberPagination]] = None,
         serializer_class=None,
         view=None,
+        language: Optional[str] = None,
     ):
+        language = self._normalize_language(language)
         paginator_cls = paginator_class or PageNumberPagination
         queryset = self.products_queryset(category=category)
         paginator = paginator_cls()
         page = paginator.paginate_queryset(queryset, request, view=view)
         data_source = page if page is not None else queryset
-        dtos = ProductMapper.many_to_dto(data_source)
+        dtos = ProductMapper.many_to_dto(data_source, language=language)
         if serializer_class is None:
             from .serializers import ProductReadSerializer  # Avoid circular import
 
@@ -116,14 +139,21 @@ class ProductService:
             else self.products.list()
         )
 
-    def get_product(self, product_id: int):
-        self.logger.debug("Fetching product", product_id=product_id)
+    def get_product(self, product_id: int, *, language: Optional[str] = None):
+        language = self._normalize_language(language)
+        self.logger.debug("Fetching product", product_id=product_id, language=language)
         p = self.products.get(id=product_id)
         if not p:
             self.logger.info("Product not found", product_id=product_id)
-        return ProductMapper.to_dto(p) if p else None
+        return ProductMapper.to_dto(p, language=language) if p else None
 
-    def create_product(self, data: Union[Dict[str, Any], ProductCreateCommand]):
+    def create_product(
+        self,
+        data: Union[Dict[str, Any], ProductCreateCommand],
+        *,
+        language: Optional[str] = None,
+    ):
+        language = self._normalize_language(language)
         cmd = (
             data
             if isinstance(data, ProductCreateCommand)
@@ -143,16 +173,21 @@ class ProductService:
         product: Product = self.products.create(**create_kwargs)
         if cmd.categories:
             self.products.set_categories(product, cmd.categories)
+        self._ensure_product_translation(product)
+        self._sync_product_translations(product, cmd.translations)
         self._bump_cache_version()
         self.logger.info("Product created", product_id=product.id)
-        return ProductMapper.to_dto(product)
+        return ProductMapper.to_dto(product, language=language)
 
     def update_product(
         self,
         product_id: int,
         data: Union[Dict[str, Any], ProductUpdateCommand],
         partial: bool = False,
+        *,
+        language: Optional[str] = None,
     ):
+        language = self._normalize_language(language)
         cmd = (
             data
             if isinstance(data, ProductUpdateCommand)
@@ -203,9 +238,11 @@ class ProductService:
                     # Best effort restore, do not mask original error.
                     pass
             raise
+        self._ensure_product_translation(product)
+        self._sync_product_translations(product, cmd.translations)
         self._bump_cache_version()
         self.logger.info("Product updated", product_id=product_id)
-        return ProductMapper.to_dto(product)
+        return ProductMapper.to_dto(product, language=language)
 
     def delete_product_with_auth(
         self, product_id: int
@@ -429,53 +466,128 @@ class ProductService:
         )
         return summary
 
+    def _get_translation_manager(self, obj):
+        manager = getattr(obj, "translations", None)
+        if manager is None or not hasattr(manager, "update_or_create"):
+            return None
+        return manager
+
+    def _ensure_product_translation(self, product: Product):
+        manager = self._get_translation_manager(product)
+        if manager is None:
+            return
+        manager.update_or_create(
+            language=self._default_language,
+            defaults={
+                "title": product.title,
+                "description": product.description,
+            },
+        )
+
+    def _sync_product_translations(
+        self, product: Product, translations: Optional[List[Dict[str, Any]]]
+    ):
+        if not translations:
+            return
+        manager = self._get_translation_manager(product)
+        if manager is None:
+            return
+        for entry in translations:
+            language = entry.get("language")
+            if not language or not is_supported_language(language):
+                continue
+            normalized = self._normalize_language(language)
+            title = entry.get("title") or product.title
+            description = entry.get("description") or product.description
+            manager.update_or_create(
+                language=normalized,
+                defaults={
+                    "title": title,
+                    "description": description,
+                },
+            )
+
 
 class CategoryService:
     def __init__(self, categories: CategoryRepositoryProtocol):
         self.categories = categories
         self.logger = logger.bind(service="CategoryService")
+        self._default_language = get_default_language()
+        self._supported_languages = tuple(iter_supported_languages())
 
-    def list_categories(self):
-        self.logger.debug("Listing categories")
-        return CategoryMapper.many_to_dto(self.categories.list())
+    def _normalize_language(self, language: Optional[str]) -> str:
+        if language:
+            normalized = language.split("-")[0].lower()
+            if normalized in self._supported_languages:
+                return normalized
+        return self._default_language
 
-    def get_category(self, category_id: int):
-        self.logger.debug("Fetching category", category_id=category_id)
+    def list_categories(self, language: Optional[str] = None):
+        language = self._normalize_language(language)
+        self.logger.debug("Listing categories", language=language)
+        return CategoryMapper.many_to_dto(
+            self.categories.list(), language=language
+        )
+
+    def get_category(self, category_id: int, *, language: Optional[str] = None):
+        language = self._normalize_language(language)
+        self.logger.debug("Fetching category", category_id=category_id, language=language)
         c = self.categories.get(id=category_id)
         if not c:
             self.logger.info("Category not found", category_id=category_id)
-        return CategoryMapper.to_dto(c) if c else None
+        return CategoryMapper.to_dto(c, language=language) if c else None
 
-    def create_category(self, data: Dict[str, Any]):
-        self.logger.info("Creating category", name=data.get("name"))
-        category: Category = self.categories.create(**data)
+    def create_category(
+        self, data: Dict[str, Any], *, language: Optional[str] = None
+    ):
+        language = self._normalize_language(language)
+        payload = dict(data)
+        translations = payload.pop("translations", None)
+        self.logger.info("Creating category", name=payload.get("name"))
+        category: Category = self.categories.create(**payload)
+        self._ensure_category_translation(category)
+        self._sync_category_translations(category, translations)
         self.logger.info("Category created", category_id=category.id)
-        return CategoryMapper.to_dto(category)
+        return CategoryMapper.to_dto(category, language=language)
 
     def create_category_with_auth(
-        self, data: Dict[str, Any]
+        self,
+        data: Dict[str, Any],
+        *,
+        language: Optional[str] = None,
     ) -> Tuple[Any, Optional[Tuple[str, str, Optional[Dict[str, Any]]]]]:
-        dto = self.create_category(data)
+        dto = self.create_category(data, language=language)
         return dto, None
 
-    def update_category(self, category_id: int, data: Dict[str, Any]):
+    def update_category(
+        self, category_id: int, data: Dict[str, Any], *, language: Optional[str] = None
+    ):
+        language = self._normalize_language(language)
         self.logger.info("Updating category", category_id=category_id)
+        payload = dict(data)
+        translations = payload.pop("translations", None)
         category: Optional[Category] = self.categories.get(id=category_id)
         if not category:
             self.logger.warning(
                 "Category update failed: not found", category_id=category_id
             )
             return None
-        for k, v in data.items():
+        for k, v in payload.items():
             setattr(category, k, v)
         category.save()
+        self._ensure_category_translation(category)
+        self._sync_category_translations(category, translations)
         self.logger.info("Category updated", category_id=category_id)
-        return CategoryMapper.to_dto(category)
+        return CategoryMapper.to_dto(category, language=language)
 
     def update_category_with_auth(
-        self, category_id: int, data: Dict[str, Any]
+        self,
+        category_id: int,
+        data: Dict[str, Any],
+        *,
+        language: Optional[str] = None,
     ) -> Tuple[Optional[Any], Optional[Tuple[str, str, Optional[Dict[str, Any]]]]]:
-        dto = self.update_category(category_id, data)
+        dto = self.update_category(category_id, data, language=language)
         if not dto:
             return (
                 None,
@@ -510,3 +622,37 @@ class CategoryService:
         if not deleted:
             return False, ("NOT_FOUND", "Category not found", {"id": str(category_id)})
         return True, None
+
+    def _get_translation_manager(self, category: Category):
+        manager = getattr(category, "translations", None)
+        if manager is None or not hasattr(manager, "update_or_create"):
+            return None
+        return manager
+
+    def _ensure_category_translation(self, category: Category):
+        manager = self._get_translation_manager(category)
+        if manager is None:
+            return
+        manager.update_or_create(
+            language=self._default_language,
+            defaults={"name": category.name},
+        )
+
+    def _sync_category_translations(
+        self, category: Category, translations: Optional[List[Dict[str, Any]]]
+    ):
+        if not translations:
+            return
+        manager = self._get_translation_manager(category)
+        if manager is None:
+            return
+        for entry in translations:
+            language = entry.get("language")
+            if not language or not is_supported_language(language):
+                continue
+            normalized = self._normalize_language(language)
+            name = entry.get("name") or category.name
+            manager.update_or_create(
+                language=normalized,
+                defaults={"name": name},
+            )

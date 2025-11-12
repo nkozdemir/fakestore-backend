@@ -31,6 +31,13 @@ requirements.txt
 .env.example
 ```
 
+## Internationalization
+- The API now supports English (`en`) and Turkish (`tr`) responses. Django's locale middleware auto-detects the preferred language via the `Accept-Language` header or `?lang=` query string.
+- Category and product names/descriptions are stored with per-language translations. When a localized value is missing, the English baseline is returned.
+- Seed data ships with curated Turkish translations for all FakeStore categories and products so clients immediately receive localized content.
+- To create or update resources with additional languages, send a `translations` array where each entry contains a `language` code (`en`, `tr`, ...), and the localized fields for that entity.
+- Error responses automatically translate their human-readable `message` field, and the locale files can be extended under `backend/locale/<lang>/LC_MESSAGES/django.po`.
+
 ## API Endpoints
 
 Base path: `/api/`
@@ -71,7 +78,10 @@ Body (create/update example) (omit `id`; it will be generated):
   "description": "Desc",
   "price": "12.99",
   "image": "http://example.com/img.png",
-  "categories": [1,2]
+  "categories": [1,2],
+  "translations": [
+    {"language": "tr", "title": "Deneme Ürün", "description": "Türkçe açıklama"}
+  ]
 }
 ```
 
@@ -96,6 +106,14 @@ Pagination (Products list):
 - Auth required: `PUT /api/categories/<id>/`
 - Auth required: `PATCH /api/categories/<id>/`
 - Auth required: `DELETE /api/categories/<id>/`
+
+Category create/update payloads accept the same optional `translations` list:
+```json
+{
+  "name": "Accessories",
+  "translations": [{"language": "tr", "name": "Aksesuarlar"}]
+}
+```
 
 ### Users
 - Auth required (staff/superuser): `GET /api/users/`
